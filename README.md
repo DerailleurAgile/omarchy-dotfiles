@@ -26,8 +26,48 @@ hyprctl reload
 
 ## Notable customizations
 
-- `hypr/bindings.lua` — `SUPER+[` / `SUPER+]` snap the focused window to
-  a half-width tile (left/right), matching normal dwindle-tile sizing
-  rather than a naive full-height float. Press the same bracket again to
-  return to a regular full-size tile, or the other bracket to flip sides.
-  Opening a second window while one is snapped auto-fills the other half.
+### Window half-snapping (`SUPER+[` / `SUPER+]`)
+
+Defined in [`hypr/bindings.lua`](hypr/bindings.lua).
+
+**What it does:** snaps the focused window to exactly half the screen,
+sized and positioned the way a real two-window tiled layout would look —
+same gaps, same border, same height a tile normally gets — not a
+full-height edge-to-edge float.
+
+```
+ SUPER+[                    SUPER+]
+┌─────────┬─────────┐      ┌─────────┬─────────┐
+│         │         │      │         │         │
+│ snapped │  empty  │      │  empty  │ snapped │
+│  left   │         │      │         │  right  │
+│         │         │      │         │         │
+└─────────┴─────────┘      └─────────┴─────────┘
+```
+
+**Keybindings:**
+
+| Key | Action |
+| --- | --- |
+| `SUPER + [` | Snap the focused window to the left half |
+| `SUPER + ]` | Snap the focused window to the right half |
+
+**How it behaves:**
+
+- Press the bracket for the side a window is *already* snapped to → it
+  un-snaps back to a regular, full-size tile.
+- Press the *other* bracket → it flips straight to the opposite side.
+- Open a second window while one is snapped → the new window is
+  automatically floated and sized into the remaining half, so the pair
+  looks and behaves like a genuine split-screen tile.
+
+**Why it's a float, not a real tile:** Hyprland's dwindle layout can't
+leave a solo window's sibling space blank — a lone tiled window always
+fills its whole container, there's no "half tile, half empty" in the
+tiling tree. So this floats the window instead, computing the exact
+geometry (`gaps_out` + `gaps_in` + `border_size`) that a real dwindle
+split would produce, so it's visually indistinguishable from one. A
+`window.open` hook then floats+mirrors any newly opened window into the
+other half whenever exactly one snapped window already owns the
+workspace, which is what makes the second window "tile as expected"
+instead of just covering the first one full-screen.
