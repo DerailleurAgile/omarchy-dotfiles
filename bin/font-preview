@@ -1,0 +1,324 @@
+#!/usr/bin/env python3
+"""Generate and open an HTML specimen sheet of installed fonts.
+
+The Omarchy font picker (omarchy font list / the Style > Font menu) shows
+every font name rendered in the same UI font, so the choices all look
+identical. This renders each font's name and a sample string *in that font*,
+side by side, so you can actually tell them apart before picking one.
+"""
+import html
+import json
+import os
+import subprocess
+import sys
+import webbrowser
+
+PANGRAM = "The quick brown fox jumps over the lazy dog — 0123456789"
+CONFUSABLES = "Il1 O0 B8 5S rn m G6 vv w"
+
+NOISE = ("emoji", "signwriting", "omarchy")
+
+
+def fc_families(extra_args):
+    out = subprocess.run(
+        ["fc-list", *extra_args, "-f", "%{family[0]}\n"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    names = {line.strip() for line in out.splitlines() if line.strip()}
+    names = {n for n in names if not any(bad in n.lower() for bad in NOISE)}
+    return sorted(names, key=str.casefold)
+
+
+def current_monospace_font():
+    try:
+        out = subprocess.run(
+            ["fc-match", "monospace", "-f", "%{family}\n"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        return out.split(",")[0].strip()
+    except Exception:
+        return ""
+
+
+def build_html(monospace, all_fonts, current):
+    data = {
+        "monospace": monospace,
+        "all": all_fonts,
+        "current": current,
+    }
+    data_json = json.dumps(data)
+    return HTML_TEMPLATE.replace("__DATA__", data_json)
+
+
+HTML_TEMPLATE = r"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Font Preview</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #16181d;
+    --panel: #1d2027;
+    --border: #2b2f38;
+    --text: #e7e9ee;
+    --muted: #9aa1ad;
+    --accent: #7aa2f7;
+    --current-bg: #1d3320;
+    --current-border: #3c8f5c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, sans-serif;
+  }
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+  }
+  h1 {
+    font-size: 16px;
+    margin: 0;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+  }
+  .tabs button {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .tabs button.active {
+    background: var(--accent);
+    color: #0b1220;
+    font-weight: 600;
+  }
+  #search {
+    flex: 1;
+    min-width: 200px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  #search:focus { outline: 1px solid var(--accent); }
+  #count {
+    color: var(--muted);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  main {
+    padding: 16px 24px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .card.current {
+    background: var(--current-bg);
+    border-color: var(--current-border);
+  }
+  .card-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+  }
+  .family-name {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: system-ui, sans-serif;
+  }
+  .badge {
+    font-size: 11px;
+    color: var(--current-border);
+    border: 1px solid var(--current-border);
+    border-radius: 999px;
+    padding: 1px 8px;
+  }
+  .sample {
+    font-size: 26px;
+    line-height: 1.3;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .confusables {
+    font-size: 18px;
+    color: var(--muted);
+    margin-top: 4px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .cmd {
+    margin-top: 8px;
+  }
+  .cmd input {
+    width: 100%;
+    max-width: 480px;
+    background: #0f1115;
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    padding: 5px 8px;
+    border-radius: 6px;
+  }
+  footer {
+    padding: 8px 24px 32px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --border: #e1e4ea;
+      --text: #1b1e24;
+      --muted: #666d7a;
+      --current-bg: #eaf7ee;
+      --current-border: #2f9e57;
+    }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Font Preview</h1>
+  <div class="tabs">
+    <button data-tab="monospace" class="active">Monospace (terminal)</button>
+    <button data-tab="all">All fonts</button>
+  </div>
+  <input id="search" type="text" placeholder="Filter by name…" autofocus>
+  <span id="count"></span>
+</header>
+<main id="cards"></main>
+<footer>Click a command field to select it, then copy with Ctrl+C.</footer>
+<script>
+const DATA = __DATA__;
+let tab = "monospace";
+const cardsEl = document.getElementById("cards");
+const countEl = document.getElementById("count");
+const searchEl = document.getElementById("search");
+
+function render() {
+  const q = searchEl.value.trim().toLowerCase();
+  const list = DATA[tab].filter(name => name.toLowerCase().includes(q));
+  countEl.textContent = list.length + " / " + DATA[tab].length + " fonts";
+  cardsEl.innerHTML = "";
+  for (const name of list) {
+    const isCurrent = tab === "monospace" && name === DATA.current;
+    const card = document.createElement("div");
+    card.className = "card" + (isCurrent ? " current" : "");
+
+    const head = document.createElement("div");
+    head.className = "card-head";
+    const fam = document.createElement("span");
+    fam.className = "family-name";
+    fam.textContent = name;
+    head.appendChild(fam);
+    if (isCurrent) {
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = "current";
+      head.appendChild(badge);
+    }
+    card.appendChild(head);
+
+    const sample = document.createElement("div");
+    sample.className = "sample";
+    sample.style.fontFamily = '"' + name.replace(/"/g, '\\"') + '"';
+    sample.textContent = __SAMPLE__;
+    card.appendChild(sample);
+
+    const conf = document.createElement("div");
+    conf.className = "confusables";
+    conf.style.fontFamily = '"' + name.replace(/"/g, '\\"') + '"';
+    conf.textContent = __CONFUSABLES__;
+    card.appendChild(conf);
+
+    if (tab === "monospace") {
+      const cmdWrap = document.createElement("div");
+      cmdWrap.className = "cmd";
+      const input = document.createElement("input");
+      input.readOnly = true;
+      input.value = 'omarchy font set "' + name + '"';
+      input.onclick = () => input.select();
+      cmdWrap.appendChild(input);
+      card.appendChild(cmdWrap);
+    }
+
+    cardsEl.appendChild(card);
+  }
+}
+
+document.querySelectorAll(".tabs button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tabs button").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    tab = btn.dataset.tab;
+    render();
+  });
+});
+searchEl.addEventListener("input", render);
+render();
+</script>
+</body>
+</html>
+"""
+
+
+def main():
+    monospace = fc_families([":spacing=100"])
+    all_fonts = fc_families([])
+    current = current_monospace_font()
+
+    out_dir = os.path.expanduser("~/.local/share/font-preview")
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, "font-preview.html")
+
+    doc = build_html(monospace, all_fonts, current)
+    doc = doc.replace("__SAMPLE__", json.dumps(PANGRAM))
+    doc = doc.replace("__CONFUSABLES__", json.dumps(CONFUSABLES))
+
+    with open(out_path, "w") as f:
+        f.write(doc)
+
+    print(f"Wrote {out_path}")
+    print(f"  {len(monospace)} monospace fonts, {len(all_fonts)} fonts total")
+
+    if "--no-open" not in sys.argv:
+        webbrowser.open(f"file://{out_path}")
+
+
+if __name__ == "__main__":
+    main()
