@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# Open one real terminal window per font, side by side, so you can see how
+# each one actually renders — not a name in a browser tab, the real glyph
+# rendering, box-drawing, ligatures, and Nerd Font icons your prompt uses.
+#
+# Why this exists: a terminal reads its font once at startup and never
+# hot-reloads it, so there's no way to preview fonts inside one running
+# terminal. This instead spawns a separate `foot` window per font (each
+# overridden with -f, no config file touched); Hyprland tiles them onto
+# your current workspace like any other new window.
+#
+# Windows are spawned directly (setsid ... & disown) rather than through
+# `hyprctl dispatch exec` — this machine's Hyprland fork routes `dispatch`
+# through a Lua config layer where plain exec strings don't reliably spawn.
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: font-compare <font-name> [<font-name> ...]
+       font-compare --list
+
+Opens one foot window per font, tiled onto your current workspace like any
+other new window, so you can compare real rendered output side by side.
+Re-running closes the previous batch first. Close windows individually with
+your normal close-window bind when you're done comparing.
+
+Examples:
+  font-compare "CaskaydiaMono Nerd Font" "JetBrainsMono Nerd Font" "Adwaita Mono"
+  font-compare --list          # show fonts you can pass in
+EOF
+}
+
+list_fonts() {
+  fc-list :spacing=100 -f "%{family[0]}\n" | grep -v -iE 'emoji|signwriting|omarchy' | sort -u
+}
+
+if [[ $# -eq 0 || "$1" == "-h" || "$1" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+if [[ "$1" == "--list" ]]; then
+  list_fonts
+  exit 0
+fi
+
+if ! command -v hyprctl >/dev/null || ! command -v foot >/dev/null; then
+  echo "font-compare needs hyprctl and foot on PATH." >&2
+  exit 1
+fi
+
+DATA_DIR="$HOME/.local/share/font-preview"
+SAMPLE="$DATA_DIR/terminal-sample.sh"
+mkdir -p "$DATA_DIR"
+
+# Shared sample-content script every window runs, then drops to a live shell
+# so you can also try your actual prompt/commands in each font.
+cat >"$SAMPLE" <<'SCRIPT'
+#!/usr/bin/env bash
+font="$1"
+rule=$(printf '=%.0s' $(seq 1 "${#font}"))
+echo "$rule"
+echo "$font"
+echo "$rule"
+echo
+echo "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+echo "abcdefghijklmnopqrstuvwxyz"
+echo "0123456789"
+echo "The quick brown fox jumps over the lazy dog."
+echo
+echo "Confusables:   Il1  O0  5S  B8  rn m  vv w"
+echo "Ligatures:     ->  =>  !=  ==  <=  >=  ===  |>  <|"
+echo "Box drawing:   ┌─┬─┐ │ │ │ └─┴─┴┘  ═══  ╔╗╚╝"
+echo "Powerline:                  "
+echo "Nerd icons:                     "
+echo "Punctuation:   {}[]()<> \"quotes\" 'ticks' \`code\` | \\ / ~ @ # \$ % ^ & *"
+echo
+echo "(live shell below — try your real prompt; close this window when done)"
+SCRIPT
+chmod +x "$SAMPLE"
+
+# Close any windows left over from a previous run (tagged with a fixed
+# app-id so this only ever matches windows this script spawned).
+pkill -f -- '-a fontcompare-tag' 2>/dev/null || true
+
+i=0
+for font in "$@"; do
+  i=$((i + 1))
+  runner="$DATA_DIR/run-$i.sh"
+  inner="\"$SAMPLE\" \"$font\"; exec bash"
+  printf '#!/bin/bash\nexec foot -f %q -a fontcompare-tag -T %q bash -c %q\n' \
+    "${font}:size=11" "$font" "$inner" >"$runner"
+  chmod +x "$runner"
+  setsid "$runner" >/dev/null 2>&1 </dev/null &
+  disown
+done
+
+echo "Opened $# window(s), tiled onto your current workspace."
+echo "Close each one with your normal close-window bind when you're done comparing."

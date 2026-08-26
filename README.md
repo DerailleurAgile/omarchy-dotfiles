@@ -54,6 +54,36 @@ font-preview            # regenerate + open in the default browser
 font-preview --no-open  # just regenerate the HTML file
 ```
 
+### `font-compare` — see fonts rendered live in real terminal windows
+
+Defined in [`bin/font-compare`](bin/font-compare).
+
+**Why:** `font-preview` (above) is a browser page — good for browsing names
+and shapes, but a browser doesn't render exactly like `foot` does, and it
+can't show box-drawing, ligatures, or Nerd Font icons the way your actual
+prompt uses them. A terminal also only reads its font once at startup —
+`omarchy font set` correctly rewrites every terminal's config, but an
+already-open window won't reflect it until it's restarted — so there's no
+way to preview a font change live inside one running terminal at all.
+
+**What it does:** opens one real `foot` window per font passed in — each
+with its font overridden on the command line (`-f`, `-a fontcompare-tag`),
+no config file touched — showing a pangram, box-drawing, ligatures, and Nerd
+Font icons, then drops into a live shell so you can try your actual prompt.
+Windows tile onto your current workspace like any other new window, so
+several fonts are visible side by side at once. Re-running closes the
+previous batch first.
+
+```bash
+font-compare --list                                    # fonts you can pass in
+font-compare "CaskaydiaMono Nerd Font" "JetBrainsMono Nerd Font" "Adwaita Mono"
+```
+
+Windows are spawned directly (`setsid ... & disown`), not via
+`hyprctl dispatch exec` — this machine's Hyprland fork routes `dispatch`
+through a Lua config layer where a plain exec string doesn't reliably spawn
+a process.
+
 ### Window half-snapping (`SUPER+[` / `SUPER+]`)
 
 Defined in [`hypr/bindings.lua`](hypr/bindings.lua).
