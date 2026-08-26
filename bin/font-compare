@@ -14,9 +14,28 @@
 # through a Lua config layer where plain exec strings don't reliably spawn.
 set -euo pipefail
 
+SIZE=14
+
+# One representative per genuinely distinct base typeface. Most of what
+# `fc-list` turns up per family is near-duplicates: the Meslo family alone
+# ships as 12 entries on this machine (S/M/L line-height presets, each with
+# a plain/Mono/DZ Nerd Font icon-width patch) that all render as the same
+# letterforms. If two fonts still look identical side by side, check
+# `font-compare --list` first — they may just be variants of one typeface.
+DISTINCT_FONTS=(
+  "CaskaydiaMono Nerd Font"
+  "JetBrainsMono Nerd Font"
+  "MesloLGS Nerd Font"
+  "BitstromWera Nerd Font"
+  "iA Writer Mono S"
+  "Liberation Mono"
+  "Adwaita Mono"
+)
+
 usage() {
   cat <<'EOF'
-Usage: font-compare <font-name> [<font-name> ...]
+Usage: font-compare [--size N] <font-name> [<font-name> ...]
+       font-compare [--size N] --distinct
        font-compare --list
 
 Opens one foot window per font, tiled onto your current workspace like any
@@ -24,15 +43,25 @@ other new window, so you can compare real rendered output side by side.
 Re-running closes the previous batch first. Close windows individually with
 your normal close-window bind when you're done comparing.
 
+  --size N     terminal font size for the comparison windows (default: 14)
+  --distinct   compare one representative of each genuinely different
+               typeface installed, skipping near-duplicate variants
+  --list       show every monospace font name you can pass in
+
 Examples:
   font-compare "CaskaydiaMono Nerd Font" "JetBrainsMono Nerd Font" "Adwaita Mono"
-  font-compare --list          # show fonts you can pass in
+  font-compare --size 20 --distinct
 EOF
 }
 
 list_fonts() {
   fc-list :spacing=100 -f "%{family[0]}\n" | grep -v -iE 'emoji|signwriting|omarchy' | sort -u
 }
+
+if [[ "${1:-}" == "--size" ]]; then
+  SIZE="$2"
+  shift 2
+fi
 
 if [[ $# -eq 0 || "$1" == "-h" || "$1" == "--help" ]]; then
   usage
@@ -42,6 +71,10 @@ fi
 if [[ "$1" == "--list" ]]; then
   list_fonts
   exit 0
+fi
+
+if [[ "$1" == "--distinct" ]]; then
+  set -- "${DISTINCT_FONTS[@]}"
 fi
 
 if ! command -v hyprctl >/dev/null || ! command -v foot >/dev/null; then
@@ -89,7 +122,7 @@ for font in "$@"; do
   runner="$DATA_DIR/run-$i.sh"
   inner="\"$SAMPLE\" \"$font\"; exec bash"
   printf '#!/bin/bash\nexec foot -f %q -a fontcompare-tag -T %q bash -c %q\n' \
-    "${font}:size=11" "$font" "$inner" >"$runner"
+    "${font}:size=${SIZE}" "$font" "$inner" >"$runner"
   chmod +x "$runner"
   setsid "$runner" >/dev/null 2>&1 </dev/null &
   disown
