@@ -8,13 +8,15 @@ alongside a normal Omarchy install.
 ## Layout
 
 ```
-hypr/   ~/.config/hypr/*   (Hyprland: keybindings, monitors, input, looks)
-bin/    ~/.local/bin/*     (personal scripts)
+hypr/    ~/.config/hypr/*                     (Hyprland: keybindings, monitors, input, looks)
+bin/     ~/.local/bin/*                       (personal scripts)
+hooks/   ~/.config/omarchy/hooks/<event>.d/*  (omarchy automation hooks)
 ```
 
-Each file under `hypr/` is symlinked individually from `~/.config/hypr/`
-(the directory itself is real, not a symlink). Same pattern for `bin/`,
-symlinked from `~/.local/bin/`.
+Each file is symlinked individually from its target directory (the
+directories themselves are real, not symlinks) — `hypr/` from
+`~/.config/hypr/`, `bin/` from `~/.local/bin/`, and each `hooks/<event>.d/`
+subdirectory from the matching `~/.config/omarchy/hooks/<event>.d/`.
 
 ## Setting up on a new machine
 
@@ -29,6 +31,14 @@ hyprctl reload
 mkdir -p ~/.local/bin
 for f in ~/Work/omarchy-dotfiles/bin/*; do
   ln -sf "$f" ~/.local/bin/"$(basename "$f")"
+done
+
+for d in ~/Work/omarchy-dotfiles/hooks/*/; do
+  event="$(basename "$d")"
+  mkdir -p ~/.config/omarchy/hooks/"$event"
+  for f in "$d"*; do
+    ln -sf "$f" ~/.config/omarchy/hooks/"$event"/"$(basename "$f")"
+  done
 done
 ```
 
@@ -53,6 +63,14 @@ ready-to-copy `omarchy font set "…"` command on each monospace card.
 font-preview            # regenerate + open in the default browser
 font-preview --no-open  # just regenerate the HTML file
 ```
+
+**Staying in sync:** the "current font" highlight is a snapshot taken at
+generation time — the page has no way to notice a later font change on its
+own. [`hooks/font-set.d/regenerate-font-preview`](hooks/font-set.d/regenerate-font-preview)
+regenerates the HTML automatically every time `omarchy font set` (or the
+Fonts menu) runs, so the data on disk is always current; an already-open
+browser tab still needs its **↺ Reload** button clicked to pick that up,
+since a local file can't push updates into an open tab.
 
 ### `font-compare` — see fonts rendered live in real terminal windows
 

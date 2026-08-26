@@ -1,0 +1,9 @@
+#!/bin/bash
+# Runs after `omarchy font set` / the Fonts menu changes the monospace font.
+# font-preview's HTML page snapshots the "current font" at generation time —
+# it has no way to notice a later font change on its own — so regenerate it
+# here to keep that snapshot accurate. The open browser tab still needs a
+# manual reload (a local file can't push updates to it), but at least the
+# data on disk is correct the instant the font changes, not just whenever
+# someone remembers to rerun the command.
+"$HOME/.local/bin/font-preview" --no-open >/dev/null 2>&1 || true

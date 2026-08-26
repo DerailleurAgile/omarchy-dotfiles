@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 import webbrowser
+from datetime import datetime
 
 PANGRAM = "The quick brown fox jumps over the lazy dog — 0123456789"
 CONFUSABLES = "Il1 O0 B8 5S rn m G6 vv w"
@@ -45,6 +46,7 @@ def build_html(monospace, all_fonts, current):
         "monospace": monospace,
         "all": all_fonts,
         "current": current,
+        "generatedAt": datetime.now().strftime("%H:%M:%S"),
     }
     data_json = json.dumps(data)
     return HTML_TEMPLATE.replace("__DATA__", data_json)
@@ -130,6 +132,24 @@ HTML_TEMPLATE = r"""<!doctype html>
     color: var(--muted);
     font-size: 12px;
     white-space: nowrap;
+  }
+  #reload {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #reload:hover { border-color: var(--accent); }
+  footer code {
+    font-family: ui-monospace, monospace;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
   }
   main {
     padding: 16px 24px 48px;
@@ -220,15 +240,23 @@ HTML_TEMPLATE = r"""<!doctype html>
   </div>
   <input id="search" type="text" placeholder="Filter by name…" autofocus>
   <span id="count"></span>
+  <button id="reload" title="Reload from disk">↻ Reload</button>
 </header>
 <main id="cards"></main>
-<footer>Click a command field to select it, then copy with Ctrl+C.</footer>
+<footer>
+  Click a command field to select it, then copy with Ctrl+C. ·
+  This page snapshots the current font at generation time (<span id="genTime"></span>) —
+  an Omarchy <code>font-set</code> hook regenerates it automatically whenever
+  you change fonts, but this open tab won't see that until you hit Reload.
+</footer>
 <script>
 const DATA = __DATA__;
 let tab = "monospace";
 const cardsEl = document.getElementById("cards");
 const countEl = document.getElementById("count");
 const searchEl = document.getElementById("search");
+document.getElementById("reload").addEventListener("click", () => location.reload());
+document.getElementById("genTime").textContent = DATA.generatedAt;
 
 function render() {
   const q = searchEl.value.trim().toLowerCase();
