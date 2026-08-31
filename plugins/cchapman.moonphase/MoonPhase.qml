@@ -2,9 +2,12 @@ import QtQuick
 
 // Moon phase bar widget for omarchy-shell.
 //
-// Draws the current lunar phase as a small disc: a full circle in the bar
-// foreground colour with the terminator painted over it, the terminator
-// position derived from the age of the moon within the synodic month.
+// Two render styles (see the `style` setting):
+//   "emoji" — the Unicode moon-phase glyphs 🌑🌒🌓🌔🌕🌖🌗🌘, rendered in
+//             colour via the system emoji font. Eight fixed steps.
+//   "draw"  — a disc drawn with Canvas, terminator computed continuously from
+//             the moon's age in the synodic month. Takes the bar's foreground
+//             colour.
 //
 // Deliberately plain QtQuick plus only the documented `bar.*` contract from
 // shell/plugins/bar/README.md (foreground, background, barSize, vertical,
@@ -34,7 +37,13 @@ Item {
     }
 
     // --- configuration ---------------------------------------------------
-    readonly property int discSize: Math.max(8, Number(setting("size", 14)))
+    readonly property bool useEmoji:
+        String(setting("style", "emoji")).toLowerCase() !== "draw"
+    // `size` 0 (or unset) means auto: 14px disc / ~0.62·barSize glyph.
+    readonly property int sizeOverride: Math.max(0, Number(setting("size", 0)))
+    readonly property int drawSize: sizeOverride > 0 ? Math.max(8, sizeOverride) : 14
+    readonly property int glyphSize:
+        sizeOverride > 0 ? Math.max(8, sizeOverride) : Math.round(barSize * 0.62)
     readonly property bool southern:
         String(setting("hemisphere", "north")).toLowerCase().charAt(0) === "s"
     readonly property bool showPercent: setting("showPercent", false) === true
@@ -59,16 +68,36 @@ Item {
         canvas.requestPaint()
     }
 
-    function phaseName() {
+    // 0 new · 1 waxing crescent · 2 first quarter · 3 waxing gibbous
+    // 4 full · 5 waning gibbous · 6 last quarter · 7 waning crescent
+    function phaseIndex() {
         var p = phase
-        if (p < 0.0169 || p >= 0.9831) return "New moon"
-        if (p < 0.2331) return "Waxing crescent"
-        if (p < 0.2669) return "First quarter"
-        if (p < 0.4831) return "Waxing gibbous"
-        if (p < 0.5169) return "Full moon"
-        if (p < 0.7331) return "Waning gibbous"
-        if (p < 0.7669) return "Last quarter"
-        return "Waning crescent"
+        if (p < 0.0169 || p >= 0.9831) return 0
+        if (p < 0.2331) return 1
+        if (p < 0.2669) return 2
+        if (p < 0.4831) return 3
+        if (p < 0.5169) return 4
+        if (p < 0.7331) return 5
+        if (p < 0.7669) return 6
+        return 7
+    }
+
+    readonly property var phaseNames: [
+        "New moon", "Waxing crescent", "First quarter", "Waxing gibbous",
+        "Full moon", "Waning gibbous", "Last quarter", "Waning crescent"]
+    readonly property var phaseGlyphs: ["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"]
+
+    function phaseName() {
+        return phaseNames[phaseIndex()]
+    }
+
+    // Southern hemisphere sees the lit side mirrored: crescents, quarters and
+    // gibbous swap; new and full are unchanged.
+    function phaseGlyph() {
+        var i = phaseIndex()
+        if (southern && i !== 0 && i !== 4)
+            i = 8 - i
+        return phaseGlyphs[i]
     }
 
     readonly property string tipText:
@@ -96,16 +125,29 @@ Item {
         anchors.centerIn: parent
         spacing: 5
 
+        // -- emoji style ----------------------------------------------
+        Text {
+            visible: root.useEmoji
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.phaseGlyph()
+            // No font.family: let Qt fall back to the colour emoji font for
+            // these codepoints. Colour glyphs ignore `color`.
+            font.pixelSize: root.glyphSize
+        }
+
+        // -- drawn style --------------------------------------------
         Canvas {
             id: canvas
-            width: root.discSize
-            height: root.discSize
+            visible: !root.useEmoji
+            width: root.drawSize
+            height: root.drawSize
             anchors.verticalCenter: parent.verticalCenter
 
             readonly property color litColor: root.bar ? root.bar.foreground : "#e6e6e6"
             readonly property color darkColor: root.bar ? root.bar.background : "#1e1e1e"
             onLitColorChanged: requestPaint()
             onDarkColorChanged: requestPaint()
+            onVisibleChanged: if (visible) requestPaint()
 
             onPaint: {
                 var ctx = getContext("2d")

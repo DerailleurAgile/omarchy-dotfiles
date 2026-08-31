@@ -1,10 +1,12 @@
 # cchapman.moonphase
 
 A bar widget for [omarchy-shell](https://omarchy.org/manual/shell-plugins/) that
-draws the current phase of the moon as a small disc in the Omarchy bar.
+shows the current phase of the moon in the Omarchy bar.
 
-- Full circle in the bar foreground colour, terminator painted over it.
-- Phase is computed locally from the synodic month (no network), repainted
+- Two styles: the colour moon glyphs `🌑🌒🌓🌔🌕🌖🌗🌘` (default, eight
+  steps, via the system emoji font) or a disc drawn in the bar colour with a
+  continuous terminator (`style: "draw"`).
+- Phase is computed locally from the synodic month (no network), refreshed
   every 30 minutes.
 - Hover shows the phase name, illuminated fraction, and day of the cycle.
 - Click sends a `notify-send` with the same detail, or runs `onClick` if set.
@@ -13,13 +15,18 @@ draws the current phase of the moon as a small disc in the Omarchy bar.
 
 | key          | type    | default   | meaning                                             |
 |--------------|---------|-----------|----------------------------------------------------|
-| `size`       | integer | `14`      | disc diameter in px (8–24)                          |
+| `style`      | enum    | `emoji`   | `emoji` glyphs, or `draw` a disc in the bar colour  |
+| `size`       | integer | `0`       | glyph pt size (emoji) / disc px (draw); `0` = auto  |
 | `hemisphere` | enum    | `north`   | `south` mirrors the lit side                        |
-| `showPercent`| boolean | `false`   | print the illuminated `%` next to the disc          |
+| `showPercent`| boolean | `false`   | print the illuminated `%` next to the glyph         |
 | `onClick`    | string  | `""`      | shell command on click; empty = notification        |
 
 Set them inline in `~/.config/omarchy/shell.json` under the widget's layout
-entry, e.g. `{ "id": "cchapman.moonphase", "size": 16, "showPercent": true }`.
+entry, e.g. `{ "id": "cchapman.moonphase", "style": "draw", "size": 16 }`.
+
+The emoji glyphs render in colour and do **not** follow the bar's foreground
+colour (that is how colour emoji work); `style: "draw"` is the theme-tinted
+option.
 
 ## Install
 

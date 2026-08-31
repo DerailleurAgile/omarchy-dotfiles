@@ -19,21 +19,33 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "size": 14,
+      "style": "emoji",
+      "size": 0,
       "hemisphere": "north",
       "showPercent": false,
       "onClick": ""
     },
     "schema": [
       {
+        "key": "style",
+        "type": "enum",
+        "label": "Render style",
+        "options": [
+          "emoji",
+          "draw"
+        ],
+        "defaultValue": "emoji",
+        "description": "emoji uses the colour moon glyphs 🌑–🌘 (eight steps). draw paints a disc in the bar colour with a continuous terminator."
+      },
+      {
         "key": "size",
         "type": "integer",
-        "label": "Disc size (px)",
-        "min": 8,
-        "max": 24,
+        "label": "Size (px)",
+        "min": 0,
+        "max": 28,
         "step": 1,
-        "defaultValue": 14,
-        "description": "Diameter of the drawn moon disc."
+        "defaultValue": 0,
+        "description": "Glyph point size (emoji) or disc diameter (draw). 0 = auto."
       },
       {
         "key": "hemisphere",
