@@ -31,6 +31,53 @@ The emoji glyphs render in colour and do **not** follow the bar's foreground
 colour (that is how colour emoji work); `style: "draw"` is the theme-tinted
 option.
 
+## How it works
+
+Everything is one file, `MoonPhase.qml`, a plain `Item` (not `qs.Ui`'s
+`BarWidget`). The bar host injects `bar`, `moduleName`, and `settings` into
+it by name; the widget only ever reads the documented `bar.*` surface
+(`foreground`, `background`, `barSize`, `fontFamily`, `run`,
+`showTooltip` / `hideTooltip`), so a shell update that reshuffles internals
+does not break it. The one exception is the popup, which uses
+`qs.Ui.PopupCard` (and `qs.Commons`' `Style` / `Color`) — the same surface
+the shipped third-party OmaOneDrive plugin builds its panel on.
+
+**Phase maths.** `recompute()` takes the days elapsed since a reference new
+moon (2000-01-06 18:14 UTC) modulo the mean synodic month (29.530588853 d).
+That gives `phase` (0 = new, 0.5 = full), `illum` = `(1 − cos 2π·phase) / 2`,
+and `ageDays`. `phaseIndex()` buckets `phase` into the eight named phases
+(the quarter/new/full buckets are deliberately narrow, ~±0.6 d). It is a
+mean-motion approximation — no lunar anomaly, so it can be a few hours off
+the true phase, which is well inside a bucket. A 30-minute `Timer` keeps it
+current across a long shell session.
+
+**`MoonDisc`.** An inline `component` (`component MoonDisc: Item { … }`) that
+draws the moon from three stacked `Rectangle`s — no `Canvas`, because a
+`Canvas` only paints while its window is mapped and never got a frame inside
+the popup:
+
+1. **Base circle** — `radius: width/2`, filled with `darkColor` (the unlit
+   moon).
+2. **Lit hemisphere** — a half-width `Rectangle` with the two corners on the
+   lit limb's side rounded to `height/2` (Qt ≥ 6.7 per-corner radius),
+   giving a true semicircle whose curved edge shares the base circle's
+   centre. Which side is lit comes from `_waxing = (phase < 0.5) !==
+   southern`.
+3. **Terminator** — a full circle painted `darkColor` for a crescent
+   (`cos 2π·phase > 0`) or `litColor` for a gibbous moon, centred and
+   squashed horizontally by `transform: Scale { xScale: |cos 2π·phase| }`.
+   At the quarters the scale is ~0 so it vanishes and the bare hemisphere
+   shows; at new / full it is a full circle that covers the disc.
+
+A faint `litColor` rim (`border`, 45% opacity) sits on top so the silhouette
+always reads. `MoonDisc` is fully declarative — it repaints itself through
+its property bindings whenever `phase`, `southern`, or the colours change.
+
+The bar uses `MoonDisc` directly. The **popup does not**: even as
+Rectangles the disc came out blank inside the `PopupCard` window, so
+`style: "draw"` gets a compact text-only card (name · illumination · day)
+and only `style: "emoji"` shows a large glyph in the popup.
+
 ## Install
 
 Source of truth lives in this repo; it is symlinked into place per-file, the
