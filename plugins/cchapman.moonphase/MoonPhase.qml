@@ -7,14 +7,14 @@ import qs.Commons
 // Two render styles (see the `style` setting):
 //   "emoji" — the Unicode moon-phase glyphs 🌑🌒🌓🌔🌕🌖🌗🌘, rendered in
 //             colour via the system emoji font. Eight fixed steps.
-//   "draw"  — a disc drawn with Canvas, terminator computed continuously from
-//             the moon's age in the synodic month. Takes the bar's foreground
-//             colour.
+//   "draw"  — a disc built from plain Rectangles (base circle + rounded
+//             half-disc + a horizontally-scaled circle for the terminator).
+//             Takes the bar's foreground colour. No Canvas, so it renders
+//             reliably inside the popup window too.
 //
-// Left-click opens a popup with a large rendering of the current phase; the
-// popup uses qs.Ui.PopupCard so it matches every other bar popup (theme,
-// slide-in, click-outside to dismiss, one-popup-at-a-time). Right-click sends
-// a notification. Everything else sticks to the documented `bar.*` contract
+// Left-click opens a popup with a large rendering of the current phase (via
+// qs.Ui.PopupCard, matching every other bar popup). Right-click sends a
+// notification. Everything else sticks to the documented `bar.*` contract
 // from shell/plugins/bar/README.md.
 Item {
     id: root
@@ -75,11 +75,6 @@ Item {
         illum = (1 - Math.cos(2 * Math.PI * phase)) / 2
     }
 
-    onPhaseChanged: {
-        barCanvas.requestPaint()
-        popupCanvas.requestPaint()
-    }
-
     // 0 new · 1 waxing crescent · 2 first quarter · 3 waxing gibbous
     // 4 full · 5 waning gibbous · 6 last quarter · 7 waning crescent
     function phaseIndex() {
@@ -116,49 +111,74 @@ Item {
     readonly property string tipText:
         phaseName() + " · " + Math.round(illum * 100) + "% lit · " + dayText
 
-    // Shared painter for the drawn style — the bar disc and the popup disc.
-    function paintMoon(ctx, w, h, lit, dark) {
-        ctx.reset()
-        var r = Math.min(w, h) / 2 - 1
-        if (r <= 0)
-            return
-        var cx = w / 2
-        var cy = h / 2
-        var p = root.phase
-        var waxing = (p < 0.5) !== root.southern
-        var cosv = Math.cos(2 * Math.PI * p)
-        var k = Math.max(Math.abs(cosv), 0.0001)
+    // --- the drawn disc, all plain Rectangles -------------------------------
+    component MoonDisc: Item {
+        id: disc
 
-        ctx.fillStyle = dark
-        ctx.beginPath()
-        ctx.arc(cx, cy, r, 0, 2 * Math.PI)
-        ctx.fill()
+        property real diameter: 14
+        property color litColor: "#e6e6e6"
+        property color darkColor: "#1e1e1e"
+        property real phase: 0            // 0..1
+        property bool southern: false
 
-        ctx.fillStyle = lit
-        ctx.beginPath()
-        if (waxing)
-            ctx.arc(cx, cy, r, -Math.PI / 2, Math.PI / 2, false)
-        else
-            ctx.arc(cx, cy, r, Math.PI / 2, Math.PI * 1.5, false)
-        ctx.closePath()
-        ctx.fill()
+        implicitWidth: diameter
+        implicitHeight: diameter
+        width: diameter
+        height: diameter
 
-        ctx.fillStyle = cosv > 0 ? dark : lit
-        ctx.save()
-        ctx.translate(cx, cy)
-        ctx.scale(k, 1)
-        ctx.beginPath()
-        ctx.arc(0, 0, r, 0, 2 * Math.PI)
-        ctx.fill()
-        ctx.restore()
+        readonly property real _cos: Math.cos(2 * Math.PI * phase)   // +1 new, -1 full
+        readonly property bool _waxing: (phase < 0.5) !== southern
+        readonly property real _k: Math.max(Math.abs(_cos), 0.0001)
 
-        ctx.globalAlpha = 0.45
-        ctx.strokeStyle = lit
-        ctx.lineWidth = Math.max(1, r * 0.03)
-        ctx.beginPath()
-        ctx.arc(cx, cy, r, 0, 2 * Math.PI)
-        ctx.stroke()
-        ctx.globalAlpha = 1
+        // unlit base disc
+        Rectangle {
+            anchors.fill: parent
+            radius: width / 2
+            antialiasing: true
+            color: disc.darkColor
+        }
+
+        // lit hemisphere — a rounded half-disc on the lit limb's side
+        Rectangle {
+            height: parent.height
+            width: parent.width / 2
+            x: disc._waxing ? parent.width / 2 : 0
+            antialiasing: true
+            color: disc.litColor
+            topLeftRadius: disc._waxing ? 0 : height / 2
+            bottomLeftRadius: disc._waxing ? 0 : height / 2
+            topRightRadius: disc._waxing ? height / 2 : 0
+            bottomRightRadius: disc._waxing ? height / 2 : 0
+        }
+
+        // terminator — a full-height circle squashed horizontally to |cos|,
+        // painted unlit for a crescent (carves the lit side back) or lit for a
+        // gibbous moon (fills the unlit side in). Centred, so it never leaves
+        // the disc.
+        Rectangle {
+            anchors.centerIn: parent
+            width: parent.width
+            height: parent.height
+            radius: width / 2
+            antialiasing: true
+            color: disc._cos > 0 ? disc.darkColor : disc.litColor
+            transform: Scale {
+                origin.x: disc.diameter / 2
+                origin.y: disc.diameter / 2
+                xScale: disc._k
+            }
+        }
+
+        // faint rim so the silhouette always reads
+        Rectangle {
+            anchors.fill: parent
+            radius: width / 2
+            antialiasing: true
+            color: "transparent"
+            border.width: 1
+            border.color: disc.litColor
+            opacity: 0.45
+        }
     }
 
     // --- layout ------------------------------------------------------
@@ -182,7 +202,6 @@ Item {
         anchors.centerIn: parent
         spacing: 5
 
-        // -- emoji style ----------------------------------------------
         Text {
             visible: root.useEmoji
             anchors.verticalCenter: parent.verticalCenter
@@ -192,21 +211,14 @@ Item {
             font.pixelSize: root.glyphSize
         }
 
-        // -- drawn style --------------------------------------------
-        Canvas {
-            id: barCanvas
+        MoonDisc {
             visible: !root.useEmoji
-            width: root.drawSize
-            height: root.drawSize
             anchors.verticalCenter: parent.verticalCenter
-
-            readonly property color litColor: root.bar ? root.bar.foreground : "#e6e6e6"
-            readonly property color darkColor: root.bar ? root.bar.background : "#1e1e1e"
-            onLitColorChanged: requestPaint()
-            onDarkColorChanged: requestPaint()
-            onVisibleChanged: if (visible) requestPaint()
-
-            onPaint: root.paintMoon(getContext("2d"), width, height, litColor, darkColor)
+            diameter: root.drawSize
+            phase: root.phase
+            southern: root.southern
+            litColor: root.bar ? root.bar.foreground : "#e6e6e6"
+            darkColor: root.bar ? root.bar.background : "#1e1e1e"
         }
 
         Text {
@@ -248,11 +260,8 @@ Item {
                 return
             }
             root.tooltipHovered = false
-            if (root.bar)
-                root.bar.hideTooltip(root)
+            root.bar.hideTooltip(root)
             popup.open = !popup.open
-            if (popup.open)
-                popupCanvas.requestPaint()
         }
     }
 
@@ -263,12 +272,12 @@ Item {
         bar: root.bar
         owner: root
         triggerMode: "click"
-        contentWidth: Style.space(190)
-        contentHeight: Style.space(196)
+        contentWidth: Style.space(196)
+        contentHeight: Style.space(200)
 
         Column {
             anchors.centerIn: parent
-            spacing: Style.space(8)
+            spacing: Style.space(10)
 
             Item {
                 width: Style.space(96)
@@ -282,19 +291,18 @@ Item {
                     font.pixelSize: Style.space(84)
                 }
 
-                Canvas {
-                    id: popupCanvas
+                MoonDisc {
                     visible: !root.useEmoji
-                    anchors.fill: parent
-
-                    readonly property color litColor: Color.popups.text
-                    readonly property color darkColor: Color.popups.background
-                    onLitColorChanged: requestPaint()
-                    onDarkColorChanged: requestPaint()
-                    onVisibleChanged: if (visible) requestPaint()
-                    Component.onCompleted: requestPaint()
-
-                    onPaint: root.paintMoon(getContext("2d"), width, height, litColor, darkColor)
+                    anchors.centerIn: parent
+                    diameter: Style.space(92)
+                    phase: root.phase
+                    southern: root.southern
+                    litColor: Color.popups.text
+                    // tint the card background toward the text colour so the
+                    // unlit side is always visible, even at new moon
+                    darkColor: Qt.tint(Color.popups.background,
+                        Qt.rgba(Color.popups.text.r, Color.popups.text.g,
+                                Color.popups.text.b, 0.14))
                 }
             }
 
