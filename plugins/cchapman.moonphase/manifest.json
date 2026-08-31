@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Moon phase",
-    "description": "Current lunar phase as a small drawn disc; hover for the phase name and illumination, click for a notification.",
+    "description": "Current lunar phase in the bar; hover for detail, left-click for a large popup rendering, right-click for a notification.",
     "category": "Info",
     "allowMultiple": false,
     "defaultSection": "right",

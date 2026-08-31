@@ -64,9 +64,10 @@ its own README).
 **What it does:** an `omarchy-shell` bar-widget plugin that draws the current
 lunar phase as a small disc — a circle in the bar foreground colour with the
 terminator painted over it, position derived from the moon's age within the
-synodic month. Computed locally (no network), repainted every 30 minutes.
-Hover for the phase name and illuminated fraction; click for a `notify-send`
-(or a configurable `onClick` command). Tunables — `size`, `hemisphere`,
+synodic month. Computed locally (no network), refreshed every 30 minutes.
+Hover for the phase name and illuminated fraction; left-click for a popup
+with a large rendering of the phase (or a configurable `onClick` command);
+right-click for a `notify-send`. Tunables — `style`, `size`, `hemisphere`,
 `showPercent`, `onClick` — via the widget's `shell.json` layout entry or the
 Style → Bar settings form.
 

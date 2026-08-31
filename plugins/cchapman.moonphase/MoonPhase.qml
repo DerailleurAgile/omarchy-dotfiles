@@ -1,4 +1,6 @@
 import QtQuick
+import qs.Ui
+import qs.Commons
 
 // Moon phase bar widget for omarchy-shell.
 //
@@ -9,10 +11,11 @@ import QtQuick
 //             the moon's age in the synodic month. Takes the bar's foreground
 //             colour.
 //
-// Deliberately plain QtQuick plus only the documented `bar.*` contract from
-// shell/plugins/bar/README.md (foreground, background, barSize, vertical,
-// run, showTooltip/hideTooltip). It does not import qs.Ui / qs.Commons, so
-// it keeps working across omarchy-shell updates that reshuffle internals.
+// Left-click opens a popup with a large rendering of the current phase; the
+// popup uses qs.Ui.PopupCard so it matches every other bar popup (theme,
+// slide-in, click-outside to dismiss, one-popup-at-a-time). Right-click sends
+// a notification. Everything else sticks to the documented `bar.*` contract
+// from shell/plugins/bar/README.md.
 Item {
     id: root
 
@@ -34,6 +37,11 @@ Item {
     // shell-quote for bash -lc (bar.run); Bar has no shellQuote of its own.
     function sq(value) {
         return "'" + String(value === undefined ? "" : value).replace(/'/g, "'\\''") + "'"
+    }
+
+    // Called by the bar's popout coordinator when another popup takes over.
+    function close() {
+        popup.open = false
     }
 
     // --- configuration ---------------------------------------------------
@@ -65,7 +73,11 @@ Item {
         ageDays = a
         phase = a / synodicDays
         illum = (1 - Math.cos(2 * Math.PI * phase)) / 2
-        canvas.requestPaint()
+    }
+
+    onPhaseChanged: {
+        barCanvas.requestPaint()
+        popupCanvas.requestPaint()
     }
 
     // 0 new · 1 waxing crescent · 2 first quarter · 3 waxing gibbous
@@ -100,9 +112,54 @@ Item {
         return phaseGlyphs[i]
     }
 
+    readonly property string dayText: "day " + (Math.floor(ageDays) + 1) + " of ~29.5"
     readonly property string tipText:
-        phaseName() + " · " + Math.round(illum * 100) + "% lit · day "
-            + (Math.floor(ageDays) + 1) + " of ~29.5"
+        phaseName() + " · " + Math.round(illum * 100) + "% lit · " + dayText
+
+    // Shared painter for the drawn style — the bar disc and the popup disc.
+    function paintMoon(ctx, w, h, lit, dark) {
+        ctx.reset()
+        var r = Math.min(w, h) / 2 - 1
+        if (r <= 0)
+            return
+        var cx = w / 2
+        var cy = h / 2
+        var p = root.phase
+        var waxing = (p < 0.5) !== root.southern
+        var cosv = Math.cos(2 * Math.PI * p)
+        var k = Math.max(Math.abs(cosv), 0.0001)
+
+        ctx.fillStyle = dark
+        ctx.beginPath()
+        ctx.arc(cx, cy, r, 0, 2 * Math.PI)
+        ctx.fill()
+
+        ctx.fillStyle = lit
+        ctx.beginPath()
+        if (waxing)
+            ctx.arc(cx, cy, r, -Math.PI / 2, Math.PI / 2, false)
+        else
+            ctx.arc(cx, cy, r, Math.PI / 2, Math.PI * 1.5, false)
+        ctx.closePath()
+        ctx.fill()
+
+        ctx.fillStyle = cosv > 0 ? dark : lit
+        ctx.save()
+        ctx.translate(cx, cy)
+        ctx.scale(k, 1)
+        ctx.beginPath()
+        ctx.arc(0, 0, r, 0, 2 * Math.PI)
+        ctx.fill()
+        ctx.restore()
+
+        ctx.globalAlpha = 0.45
+        ctx.strokeStyle = lit
+        ctx.lineWidth = Math.max(1, r * 0.03)
+        ctx.beginPath()
+        ctx.arc(cx, cy, r, 0, 2 * Math.PI)
+        ctx.stroke()
+        ctx.globalAlpha = 1
+    }
 
     // --- layout ------------------------------------------------------
     implicitWidth: content.implicitWidth + 8
@@ -111,7 +168,7 @@ Item {
 
     Component.onCompleted: recompute()
 
-    // The phase barely moves within a day; a repaint every 30 min is plenty
+    // The phase barely moves within a day; a refresh every 30 min is plenty
     // and keeps it correct across a long-running shell session.
     Timer {
         interval: 1800000
@@ -137,7 +194,7 @@ Item {
 
         // -- drawn style --------------------------------------------
         Canvas {
-            id: canvas
+            id: barCanvas
             visible: !root.useEmoji
             width: root.drawSize
             height: root.drawSize
@@ -149,60 +206,7 @@ Item {
             onDarkColorChanged: requestPaint()
             onVisibleChanged: if (visible) requestPaint()
 
-            onPaint: {
-                var ctx = getContext("2d")
-                ctx.reset()
-
-                var r = Math.min(width, height) / 2 - 1
-                if (r <= 0)
-                    return
-                var cx = width / 2
-                var cy = height / 2
-
-                var p = root.phase
-                // Northern hemisphere: waxing moon is lit on the right.
-                var waxing = (p < 0.5) !== root.southern
-                var cosv = Math.cos(2 * Math.PI * p) // +1 at new, -1 at full
-                var k = Math.max(Math.abs(cosv), 0.0001) // terminator x-scale
-
-                // Unlit disc.
-                ctx.fillStyle = canvas.darkColor
-                ctx.beginPath()
-                ctx.arc(cx, cy, r, 0, 2 * Math.PI)
-                ctx.fill()
-
-                // Lit hemisphere (the limb side).
-                ctx.fillStyle = canvas.litColor
-                ctx.beginPath()
-                if (waxing)
-                    ctx.arc(cx, cy, r, -Math.PI / 2, Math.PI / 2, false)
-                else
-                    ctx.arc(cx, cy, r, Math.PI / 2, Math.PI * 1.5, false)
-                ctx.closePath()
-                ctx.fill()
-
-                // Terminator: a circle squashed horizontally to |cos(phase)|,
-                // painted unlit for a crescent (carves the lit side back) or
-                // lit for a gibbous moon (fills the unlit side in).
-                ctx.fillStyle = cosv > 0 ? canvas.darkColor : canvas.litColor
-                ctx.save()
-                ctx.translate(cx, cy)
-                ctx.scale(k, 1)
-                ctx.beginPath()
-                ctx.arc(0, 0, r, 0, 2 * Math.PI)
-                ctx.fill()
-                ctx.restore()
-
-                // Faint rim so a near-new moon still reads against a
-                // background close to the bar colour.
-                ctx.globalAlpha = 0.45
-                ctx.strokeStyle = canvas.litColor
-                ctx.lineWidth = 1
-                ctx.beginPath()
-                ctx.arc(cx, cy, r, 0, 2 * Math.PI)
-                ctx.stroke()
-                ctx.globalAlpha = 1
-            }
+            onPaint: root.paintMoon(getContext("2d"), width, height, litColor, darkColor)
         }
 
         Text {
@@ -232,14 +236,94 @@ Item {
         onClicked: function (mouse) {
             if (!root.bar)
                 return
+            if (mouse.button === Qt.RightButton) {
+                root.bar.run("notify-send -a Moon "
+                    + root.sq(root.phaseName()) + " "
+                    + root.sq(Math.round(root.illum * 100) + "% illuminated — " + root.dayText))
+                return
+            }
+            // left button
             if (root.clickCommand !== "") {
                 root.bar.run(root.clickCommand)
                 return
             }
-            root.bar.run("notify-send -a Moon "
-                + root.sq(root.phaseName()) + " "
-                + root.sq(Math.round(root.illum * 100) + "% illuminated — day "
-                    + (Math.floor(root.ageDays) + 1) + " of the ~29.5-day cycle"))
+            root.tooltipHovered = false
+            if (root.bar)
+                root.bar.hideTooltip(root)
+            popup.open = !popup.open
+            if (popup.open)
+                popupCanvas.requestPaint()
+        }
+    }
+
+    // --- popup: a large rendering of the current phase ------------------
+    PopupCard {
+        id: popup
+        anchorItem: root
+        bar: root.bar
+        owner: root
+        triggerMode: "click"
+        contentWidth: Style.space(190)
+        contentHeight: Style.space(196)
+
+        Column {
+            anchors.centerIn: parent
+            spacing: Style.space(8)
+
+            Item {
+                width: Style.space(96)
+                height: Style.space(96)
+                anchors.horizontalCenter: parent.horizontalCenter
+
+                Text {
+                    visible: root.useEmoji
+                    anchors.centerIn: parent
+                    text: root.phaseGlyph()
+                    font.pixelSize: Style.space(84)
+                }
+
+                Canvas {
+                    id: popupCanvas
+                    visible: !root.useEmoji
+                    anchors.fill: parent
+
+                    readonly property color litColor: Color.popups.text
+                    readonly property color darkColor: Color.popups.background
+                    onLitColorChanged: requestPaint()
+                    onDarkColorChanged: requestPaint()
+                    onVisibleChanged: if (visible) requestPaint()
+                    Component.onCompleted: requestPaint()
+
+                    onPaint: root.paintMoon(getContext("2d"), width, height, litColor, darkColor)
+                }
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: root.phaseName()
+                color: Color.popups.text
+                font.family: Style.font.family
+                font.pixelSize: Style.font.title
+                font.bold: true
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: Math.round(root.illum * 100) + "% illuminated"
+                color: Color.popups.text
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                opacity: 0.85
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: root.dayText
+                color: Color.popups.text
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                opacity: 0.85
+            }
         }
     }
 }
