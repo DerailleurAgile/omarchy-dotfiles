@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "id": "cchapman.moonphase",
+  "name": "Moon Phase",
+  "version": "1.0.0",
+  "author": "cchapman",
+  "license": "MIT",
+  "description": "Current lunar phase, drawn as a small moon disc, for the Omarchy bar.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "MoonPhase.qml"
+  },
+  "barWidget": {
+    "displayName": "Moon phase",
+    "description": "Current lunar phase as a small drawn disc; hover for the phase name and illumination, click for a notification.",
+    "category": "Info",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "size": 14,
+      "hemisphere": "north",
+      "showPercent": false,
+      "onClick": ""
+    },
+    "schema": [
+      {
+        "key": "size",
+        "type": "integer",
+        "label": "Disc size (px)",
+        "min": 8,
+        "max": 24,
+        "step": 1,
+        "defaultValue": 14,
+        "description": "Diameter of the drawn moon disc."
+      },
+      {
+        "key": "hemisphere",
+        "type": "enum",
+        "label": "Hemisphere",
+        "options": [
+          "north",
+          "south"
+        ],
+        "defaultValue": "north",
+        "description": "Southern hemisphere sees the lit side mirrored."
+      },
+      {
+        "key": "showPercent",
+        "type": "boolean",
+        "label": "Show illumination %",
+        "defaultValue": false,
+        "description": "Print the illuminated fraction next to the disc."
+      },
+      {
+        "key": "onClick",
+        "type": "string",
+        "label": "Click command",
+        "defaultValue": "",
+        "description": "Shell command to run on left/right click. Empty shows a notification with the phase details."
+      }
+    ]
+  }
+}

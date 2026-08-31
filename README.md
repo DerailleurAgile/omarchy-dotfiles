@@ -8,15 +8,18 @@ alongside a normal Omarchy install.
 ## Layout
 
 ```
-hypr/    ~/.config/hypr/*                     (Hyprland: keybindings, monitors, input, looks)
-bin/     ~/.local/bin/*                       (personal scripts)
-hooks/   ~/.config/omarchy/hooks/<event>.d/*  (omarchy automation hooks)
+hypr/     ~/.config/hypr/*                     (Hyprland: keybindings, monitors, input, looks)
+bin/      ~/.local/bin/*                       (personal scripts)
+hooks/    ~/.config/omarchy/hooks/<event>.d/*  (omarchy automation hooks)
+plugins/  ~/.config/omarchy/plugins/<id>/*     (omarchy-shell plugins)
 ```
 
 Each file is symlinked individually from its target directory (the
 directories themselves are real, not symlinks) — `hypr/` from
-`~/.config/hypr/`, `bin/` from `~/.local/bin/`, and each `hooks/<event>.d/`
-subdirectory from the matching `~/.config/omarchy/hooks/<event>.d/`.
+`~/.config/hypr/`, `bin/` from `~/.local/bin/`, each `hooks/<event>.d/`
+subdirectory from the matching `~/.config/omarchy/hooks/<event>.d/`, and each
+`plugins/<id>/` subdirectory from the matching
+`~/.config/omarchy/plugins/<id>/`.
 
 ## Setting up on a new machine
 
@@ -40,9 +43,37 @@ for d in ~/Work/omarchy-dotfiles/hooks/*/; do
     ln -sf "$f" ~/.config/omarchy/hooks/"$event"/"$(basename "$f")"
   done
 done
+
+for d in ~/Work/omarchy-dotfiles/plugins/*/; do
+  id="$(basename "$d")"
+  mkdir -p ~/.config/omarchy/plugins/"$id"
+  for f in "$d"*; do
+    ln -sf "$f" ~/.config/omarchy/plugins/"$id"/"$(basename "$f")"
+  done
+  omarchy plugin enable "$id"
+done
 ```
 
 ## Notable customizations
+
+### `cchapman.moonphase` — moon phase in the bar
+
+Defined in [`plugins/cchapman.moonphase/`](plugins/cchapman.moonphase/) (see
+its own README).
+
+**What it does:** an `omarchy-shell` bar-widget plugin that draws the current
+lunar phase as a small disc — a circle in the bar foreground colour with the
+terminator painted over it, position derived from the moon's age within the
+synodic month. Computed locally (no network), repainted every 30 minutes.
+Hover for the phase name and illuminated fraction; click for a `notify-send`
+(or a configurable `onClick` command). Tunables — `size`, `hemisphere`,
+`showPercent`, `onClick` — via the widget's `shell.json` layout entry or the
+Style → Bar settings form.
+
+**Why a plugin, not a custom `shell.json` module:** it shows up in
+`omarchy plugin list` / `enable` / `disable`, carries its own settings schema,
+and only touches the documented `bar.*` contract, so it survives shell
+updates.
 
 ### `font-preview` — see installed fonts rendered in themselves
 
