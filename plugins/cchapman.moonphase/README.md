@@ -9,10 +9,9 @@ shows the current phase of the moon in the Omarchy bar.
 - Phase is computed locally from the synodic month (no network), refreshed
   every 30 minutes.
 - Hover shows the phase name, illuminated fraction, and day of the cycle.
-- **Left-click** opens a popup with a large rendering of the current phase
-  (`qs.Ui.PopupCard`, so it matches other bar popups — slide-in, theme,
-  click-outside to dismiss). If `onClick` is set, left-click runs that
-  instead.
+- **Left-click** opens a popup (`qs.Ui.PopupCard`) with the phase name,
+  illumination, and day of the cycle — plus a large glyph in `emoji` style.
+  If `onClick` is set, left-click runs that instead.
 - **Right-click** sends a `notify-send` with the phase detail.
 
 ## Settings (`barWidget.schema`)

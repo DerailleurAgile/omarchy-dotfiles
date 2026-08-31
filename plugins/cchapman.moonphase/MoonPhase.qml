@@ -265,7 +265,7 @@ Item {
         }
     }
 
-    // --- popup: a large rendering of the current phase ------------------
+    // --- popup: phase detail -----------------------------------------------
     PopupCard {
         id: popup
         anchorItem: root
@@ -273,37 +273,19 @@ Item {
         owner: root
         triggerMode: "click"
         contentWidth: Style.space(196)
-        contentHeight: Style.space(200)
+        contentHeight: root.useEmoji ? Style.space(196) : Style.space(104)
 
         Column {
             anchors.centerIn: parent
             spacing: Style.space(10)
 
-            Item {
-                width: Style.space(96)
-                height: Style.space(96)
+            // Large glyph, emoji style only. The drawn disc rendered blank
+            // inside the popup window, so "draw" gets the text-only card.
+            Text {
+                visible: root.useEmoji
                 anchors.horizontalCenter: parent.horizontalCenter
-
-                Text {
-                    visible: root.useEmoji
-                    anchors.centerIn: parent
-                    text: root.phaseGlyph()
-                    font.pixelSize: Style.space(84)
-                }
-
-                MoonDisc {
-                    visible: !root.useEmoji
-                    anchors.centerIn: parent
-                    diameter: Style.space(92)
-                    phase: root.phase
-                    southern: root.southern
-                    litColor: Color.popups.text
-                    // tint the card background toward the text colour so the
-                    // unlit side is always visible, even at new moon
-                    darkColor: Qt.tint(Color.popups.background,
-                        Qt.rgba(Color.popups.text.r, Color.popups.text.g,
-                                Color.popups.text.b, 0.14))
-                }
+                text: root.phaseGlyph()
+                font.pixelSize: Style.space(84)
             }
 
             Text {
