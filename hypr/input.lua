@@ -1,6 +1,14 @@
 -- Keep only your personal input overrides here. Uncommented settings below
 -- replace Omarchy's defaults.
 
+-- Kano wireless keyboard has no Super key: make Caps Lock an additional Super.
+-- (Drops Omarchy's compose:caps; keeps both-shift capslock cancel.)
+hl.config({
+  input = {
+    kb_options = "caps:super,shift:both_capslock_cancel",
+  },
+})
+
 -- Keyboard layout and options.
 -- See https://wiki.hypr.land/Configuring/Basics/Variables/#input
 -- hl.config({
