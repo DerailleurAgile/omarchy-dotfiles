@@ -191,3 +191,22 @@ has no Super key, and Omarchy binds nearly every shortcut to `SUPER`.
 `caps:super,shift:both_capslock_cancel`, making Caps Lock an additional
 Super modifier. This replaces Omarchy's default `compose:caps`, so Caps
 Lock no longer acts as a Compose key.
+
+**Why it survives an update:** `hyprland.lua` loads
+`require("default.hypr.omarchy")` (which sets the default `kb_options`)
+*before* `require("hypr.input")`, so this override always wins on a
+last-write basis. `omarchy update` only touches `/usr/share/omarchy/*`,
+never `~/.config/hypr/*` — and every file there is symlinked into this
+repo, so any stray write shows up as a `git diff`.
+
+**Maintenance notes:**
+
+- `hypr/hyprland.lua` here is a pinned copy of Omarchy's stock file. If a
+  future release rewrites it and you adopt the new version, confirm
+  `require("hypr.input")` still loads *after* `require("default.hypr.omarchy")`.
+  Spot-check: `diff /usr/share/omarchy/config/hypr/hyprland.lua ~/.config/hypr/hyprland.lua`.
+- The `kb_options` string is hardcoded. Omarchy's default appends
+  `,grp:alts_toggle` when the primary `kb_layout` is non-Latin; if you
+  ever add such a layout, replicate that in [`hypr/input.lua`](hypr/input.lua).
+- Failure mode is loud, not silent: if the override ever stops applying,
+  Caps Lock simply stops triggering `SUPER` bindings.
