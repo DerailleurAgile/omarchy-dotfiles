@@ -179,3 +179,15 @@ split would produce, so it's visually indistinguishable from one. A
 other half whenever exactly one snapped window already owns the
 workspace, which is what makes the second window "tile as expected"
 instead of just covering the first one full-screen.
+
+### Caps Lock as Super (Kano keyboard)
+
+Defined in [`hypr/input.lua`](hypr/input.lua).
+
+**Why:** the Kano wireless keyboard (from the old Raspberry Pi kids' kit)
+has no Super key, and Omarchy binds nearly every shortcut to `SUPER`.
+
+**What it does:** sets `input.kb_options` to
+`caps:super,shift:both_capslock_cancel`, making Caps Lock an additional
+Super modifier. This replaces Omarchy's default `compose:caps`, so Caps
+Lock no longer acts as a Compose key.
