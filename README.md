@@ -76,6 +76,32 @@ Style → Bar settings form.
 and only touches the documented `bar.*` contract, so it survives shell
 updates.
 
+### `cchapman.weather` — bigger weather glyph in the bar
+
+Defined in [`plugins/cchapman.weather/`](plugins/cchapman.weather/) (see
+its own README).
+
+**What it does:** a clone of the stock `omarchy.weather` plugin whose only
+real edit is in `BarWidget.qml` — `fontSize: 28` /
+`opticalSize: Style.bar.iconCanvas + 14`, up from the stock ~13 px glyph,
+which is too small to read on this ~157 PPI panel. Only the glyph canvas
+grows; the 21 px click slot and the bar height are unchanged. `Panel.qml`
+and `Model.js` are verbatim copies of the packaged plugin.
+
+**Why a clone, not a `shell.json` tweak:** the bar exposes no icon-size
+setting, so reaching `BarWidget.qml` needs a clone.
+
+**Maintenance:** unlike `cchapman.moonphase`, a clone does *not* survive
+shell updates cleanly — `omarchy update` moves the packaged plugin and the
+shell APIs it calls, and the frozen clone breaks silently (this already
+cost one whole-session keyboard lock after 4.0.3, when the panel's
+`close()` started throwing on a since-removed writable property). After
+every `omarchy update`, diff `Panel.qml` / `Model.js` against
+`/usr/share/omarchy/shell/plugins/panels/weather/`, copy forward any
+packaged-only changes, then `omarchy restart shell` (the plugin hot-reload
+does not reliably reload a changed cloned panel). Full procedure in the
+plugin's own README.
+
 ### `font-preview` — see installed fonts rendered in themselves
 
 Defined in [`bin/font-preview`](bin/font-preview).
