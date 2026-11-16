@@ -1,0 +1,7 @@
+visualizer = "ClassicPeak"
+
+eq_preset = "Bass Boost"
+eq = [7, 5, 4, 2, 1, 0, -1, 0, 1, 2]
+theme = ""
+speed = 1.00
+provider = "local"

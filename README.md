@@ -12,6 +12,7 @@ hypr/     ~/.config/hypr/*                     (Hyprland: keybindings, monitors,
 bin/      ~/.local/bin/*                       (personal scripts)
 hooks/    ~/.config/omarchy/hooks/<event>.d/*  (omarchy automation hooks)
 plugins/  ~/.config/omarchy/plugins/<id>/*     (omarchy-shell plugins)
+cliamp/   ~/.config/cliamp/{config.toml,playlists/*}  (cliamp player settings + playlists)
 ```
 
 Each file is symlinked individually from its target directory (the
@@ -19,7 +20,9 @@ directories themselves are real, not symlinks) — `hypr/` from
 `~/.config/hypr/`, `bin/` from `~/.local/bin/`, each `hooks/<event>.d/`
 subdirectory from the matching `~/.config/omarchy/hooks/<event>.d/`, and each
 `plugins/<id>/` subdirectory from the matching
-`~/.config/omarchy/plugins/<id>/`.
+`~/.config/omarchy/plugins/<id>/`. For cliamp, only `config.toml` and the
+playlist files are tracked; runtime state (`history.toml`, `resume.json`,
+`cliamp.log`, `*.bak`) stays local.
 
 ## Setting up on a new machine
 
@@ -51,6 +54,12 @@ for d in ~/Work/omarchy-dotfiles/plugins/*/; do
     ln -sf "$f" ~/.config/omarchy/plugins/"$id"/"$(basename "$f")"
   done
   omarchy plugin enable "$id"
+done
+
+mkdir -p ~/.config/cliamp/playlists
+ln -sf ~/Work/omarchy-dotfiles/cliamp/config.toml ~/.config/cliamp/config.toml
+for f in ~/Work/omarchy-dotfiles/cliamp/playlists/*; do
+  ln -sf "$f" ~/.config/cliamp/playlists/"$(basename "$f")"
 done
 ```
 

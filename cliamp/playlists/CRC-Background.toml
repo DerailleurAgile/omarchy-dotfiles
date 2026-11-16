@@ -1,0 +1,58 @@
+# --- Christian jazz ---
+
+[[track]]
+path = "https://www.youtube.com/watch?v=juWsw7-IuaE"
+title = "Christian Jazz Playlist ✨ Psalm in Jazz for Work & Study 📖 | Café Focus Music"
+artist = "Jazz Bible"
+duration_secs = 7418
+
+[[track]]
+path = "https://www.youtube.com/watch?v=QA3RYbMEm6Y"
+title = "Listen to Jesus Play Jazz Psalms 🎷 | Relaxing Christian Bible Music"
+artist = "Reavo"
+
+[[track]]
+path = "https://www.youtube.com/watch?v=xGnw85cGb_E"
+title = "He Came for Us | Calming Scripture Jazz for Rest & Reflection"
+artist = "Reavo"
+duration_secs = 4461
+
+# --- Lofi ---
+
+[[track]]
+path = "http://radio.cliamp.stream/lofi/stream"
+title = "Lofi"
+
+[[track]]
+path = "https://www.youtube.com/watch?v=rFZHOHl-L8A"
+title = "lofi hip hop radio 📚 beats to relax/study to"
+artist = "Lofi Girl"
+
+# --- Synthwave / electronic ---
+
+[[track]]
+path = "http://radio.cliamp.stream/synthwave/stream"
+title = "Synthwave"
+
+[[track]]
+path = "https://www.youtube.com/watch?v=pIrmAN-O1Ok"
+title = "Futurescapes (24/7)"
+artist = "Futurescapes"
+
+[[track]]
+path = "https://www.youtube.com/watch?v=6FKuITRNMdI"
+title = "Resonance: Relaxing Ambient Sci-Fi Music for Autumn"
+artist = "Futurescapes"
+duration_secs = 3600
+
+[[track]]
+path = "https://www.youtube.com/watch?v=opesoCLJaH8"
+title = "Unison: Atmospheric Sci-Fi Ambient Music for Relaxation"
+artist = "Futurescapes"
+duration_secs = 3600
+
+[[track]]
+path = "https://www.youtube.com/watch?v=tYDAAceJvu8"
+title = "Sere: Atmospheric Sci-Fi Ambient Music for Autumn"
+artist = "Futurescapes"
+duration_secs = 3600
