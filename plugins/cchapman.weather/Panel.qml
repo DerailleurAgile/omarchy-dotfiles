@@ -183,7 +183,8 @@ Panel {
       + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day"
       + "&forecast_days=4"
       + "&timezone=auto"
-    dailyForecastProc.command = ["curl", "-fsS", "--max-time", "5", url]
+    // Open-Meteo 403s curl's default User-Agent (omacom/omarchy#19127); drop on re-sync once #19133/#19198 ships.
+    dailyForecastProc.command = ["curl", "-fsS", "-A", "omarchy-shell", "--max-time", "5", url]
     dailyForecastProc.running = true
   }
 
@@ -274,7 +275,7 @@ Panel {
 
   function startGeocode() {
     geocodeActiveQuery = geocodePendingQuery
-    geocodeProc.command = ["curl", "-fsS", "--max-time", "5",
+    geocodeProc.command = ["curl", "-fsS", "-A", "omarchy-shell", "--max-time", "5",
       "https://geocoding-api.open-meteo.com/v1/search?name=" + encodeURIComponent(geocodeActiveQuery) + "&count=5&language=en&format=json"]
     geocodeProc.running = true
   }

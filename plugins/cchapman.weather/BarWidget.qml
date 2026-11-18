@@ -46,6 +46,27 @@ BarWidget {
     if (panelLoader.item) panelLoader.item.closeForPopoutSwitch()
   }
 
+  // Omarchy 4.5 ignores BarIconButton.fontSize for size: every glyph is drawn
+  // normalized to Style.bar.iconSize (OpticalGlyph.paintedSize). Weather glyphs
+  // render visibly smaller than the other bar icons at that size, so scale this
+  // widget's glyph up. Drop on re-sync if upstream sizing changes.
+  readonly property real iconScale: 1.8
+  readonly property real iconNudgeY: 3
+
+  function applyIconScale(item) {
+    if (!item) return false
+    if (item.paintedSize !== undefined && item.renderedFontSize !== undefined) {
+      item.paintedSize = Qt.binding(function() { return Style.bar.iconSize * root.iconScale })
+      // The weather glyphs' measured ink runs below the visible shape, so the
+      // optical centering leaves them riding high; nudge back down.
+      item.transform = [Qt.createQmlObject("import QtQuick; Translate { y: " + root.iconNudgeY + " }", item)]
+      return true
+    }
+    for (var i = 0; i < item.children.length; i++)
+      if (applyIconScale(item.children[i])) return true
+    return false
+  }
+
   visible: panelLoader.item && panelLoader.item.label !== ""
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -75,10 +96,10 @@ BarWidget {
     // pushed close to the bar's own height (30px) so it actually reads at a
     // glance. The button already fills the full bar height, so this doesn't
     // grow the bar itself.
-    fontSize: 28
-    opticalSize: Style.bar.iconCanvas + 14
     // Tooltip suppressed because the panel is the detail view.
+    opticalSize: Style.bar.iconCanvas + 14
     tooltipText: ""
+    Component.onCompleted: root.applyIconScale(button)
 
     onPressed: function(b) {
       if (!root.bar) return
