@@ -1,0 +1,26 @@
+#!/bin/bash
+# Launch Foliate with highlights drawn for light pages.
+#
+# With the desktop in dark mode, Foliate's reader.html blends annotation
+# highlights with mix-blend-mode "screen" (meant for dark pages), which washes
+# them out on the always-light custom themes. This extracts the packaged
+# reader.html fresh on every launch (so it tracks Foliate updates), switches
+# the dark-mode blend to "multiply", and overlays it via G_RESOURCE_OVERLAYS.
+#
+# Upstream context: https://github.com/johnfactotum/foliate/issues/1597
+
+GRES=/usr/share/com.github.johnfactotum.Foliate/com.github.johnfactotum.Foliate.gresource
+RES=/com/github/johnfactotum/Foliate/reader/reader.html
+OUT=${XDG_CACHE_HOME:-$HOME/.cache}/foliate-light/reader.html
+
+if [[ -f $GRES ]] && mkdir -p "${OUT%/*}" &&
+   gresource extract "$GRES" "$RES" \
+     | sed 's/--overlayer-highlight-blend-mode: screen;/--overlayer-highlight-blend-mode: multiply;/' \
+     > "$OUT.tmp" && [[ -s $OUT.tmp ]]; then
+  mv "$OUT.tmp" "$OUT"
+  export G_RESOURCE_OVERLAYS="$RES=$OUT${G_RESOURCE_OVERLAYS:+:$G_RESOURCE_OVERLAYS}"
+else
+  rm -f "$OUT.tmp"  # fall back to stock behavior
+fi
+
+exec /usr/bin/foliate "$@"

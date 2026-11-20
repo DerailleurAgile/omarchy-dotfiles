@@ -169,6 +169,36 @@ Windows are spawned directly (`setsid ... & disown`), not via
 through a Lua config layer where a plain exec string doesn't reliably spawn
 a process.
 
+### `foliate-light` — readable highlights on light book pages in dark mode
+
+Defined in [`bin/foliate-light`](bin/foliate-light).
+
+**Why:** with the desktop on `prefer-dark`, Foliate 3.3 renders the book
+page with dark colors no matter what the in-app Light Style swatch says.
+The page is kept light with custom themes whose `dark` colors match their
+`light` colors (`~/.config/com.github.johnfactotum.Foliate/themes/`, not
+tracked here). But `reader.html` still blends annotation highlights with
+`screen` in dark mode, which washes them out on a light page.
+Upstream: [foliate#1597](https://github.com/johnfactotum/foliate/issues/1597).
+
+**What it does:** on every launch, extracts the packaged `reader.html` from
+Foliate's gresource, switches the dark-mode highlight blend to `multiply`,
+points `G_RESOURCE_OVERLAYS` at the patched copy, and runs Foliate. It
+re-extracts every time, so it follows Foliate updates, and it falls back to
+stock behavior if anything fails.
+
+**Launcher hookup (not tracked):** it only takes effect if Foliate is started
+through it, so copy the system desktop entry with `Exec` swapped in:
+
+```bash
+sed 's|^Exec=foliate |Exec=/home/cchapman/.local/bin/foliate-light |' \
+  /usr/share/applications/com.github.johnfactotum.Foliate.desktop \
+  > ~/.local/share/applications/com.github.johnfactotum.Foliate.desktop
+```
+
+Foliate is single-instance: quit it fully before relaunching, or the new
+launch hands off to the running process without the overlay.
+
 ### Window half-snapping (`SUPER+[` / `SUPER+]`)
 
 Defined in [`hypr/bindings.lua`](hypr/bindings.lua).
