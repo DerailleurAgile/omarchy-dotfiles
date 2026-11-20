@@ -211,6 +211,10 @@ gresource, patches them, points `G_RESOURCE_OVERLAYS` at the patched copies
   same way in yellow / light blue (`rgb(153,193,241)`, the first blue in the
   Custom Color dialog; Foliate has no built-in blue) and
   leave the last-used color alone.
+- `book-viewer.js`: click an existing highlight to open its popover, then
+  **Ctrl+1** / **Ctrl+2** recolor it yellow / light blue and close the
+  popover. This works like picking from the popover's color drop-down, but it
+  doesn't change the last-used color.
 
 It re-extracts every time, so the patches follow Foliate updates. Each patch
 applies only if its anchor text appears exactly once. If any patch for a file

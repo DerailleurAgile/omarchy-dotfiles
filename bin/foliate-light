@@ -15,6 +15,9 @@
 #    Ctrl+1 / Ctrl+2 do the same in yellow / light blue (GTK color dialog's
 #    first blue, rgb(153,193,241)) without changing the
 #    last-used color that Ctrl+H and the button use.
+#    Clicking an existing highlight opens its annotation popover; there,
+#    Ctrl+1 / Ctrl+2 recolor that highlight and close the popover (same as
+#    picking the color from its drop-down, minus changing the last-used color).
 #
 # Each file is extracted fresh from the packaged gresource on every launch (so
 # patches track Foliate updates) and loaded via G_RESOURCE_OVERLAYS. If any
@@ -27,6 +30,8 @@ GRES=/usr/share/com.github.johnfactotum.Foliate/com.github.johnfactotum.Foliate.
 PREFIX=/com/github/johnfactotum/Foliate
 CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/foliate-light
 OVERLAYS=()
+COLOR1=yellow
+COLOR2='rgb(153,193,241)'  # first blue in the GTK color dialog
 
 # patch <resource path under PREFIX> <literal anchor> <sed expression> [<anchor> <expr>]...
 # Applies only if every anchor appears exactly once in the packaged file.
@@ -53,9 +58,11 @@ if [[ -f $GRES ]] && mkdir -p "$CACHE"; then
 
   patch book-viewer.js \
     'const popover = new SelectionPopover()' \
-    "s/const popover = new SelectionPopover()/&\n            const foliateLightHighlight = color => () => { const prev = this.highlight_color; if (color) this.highlight_color = color; this._foliateLightQuick = true; popover.activate_action('selection.highlight', null); if (color) this.highlight_color = prev; popover.popdown(); return true }\n            popover.add_controller(utils.addShortcuts({ '<ctrl>h': foliateLightHighlight(null), '<ctrl>1': foliateLightHighlight('yellow'), '<ctrl>2': foliateLightHighlight('rgb(153,193,241)') }))/" \
+    "s/const popover = new SelectionPopover()/&\n            const foliateLightHighlight = color => () => { const prev = this.highlight_color; if (color) this.highlight_color = color; this._foliateLightQuick = true; popover.activate_action('selection.highlight', null); if (color) this.highlight_color = prev; popover.popdown(); return true }\n            popover.add_controller(utils.addShortcuts({ '<ctrl>h': foliateLightHighlight(null), '<ctrl>1': foliateLightHighlight('$COLOR1'), '<ctrl>2': foliateLightHighlight('$COLOR2') }))/" \
     "if (type === 'annotation') return new Promise(resolve => {" \
-    "s/if (type === 'annotation') return new Promise(resolve => {/&\n            if (this._foliateLightQuick) { this._foliateLightQuick = false; resolve(); return }/"
+    "s/if (type === 'annotation') return new Promise(resolve => {/&\n            if (this._foliateLightQuick) { this._foliateLightQuick = false; resolve(); return }/" \
+    "popover.connect('closed', () => resolve())" \
+    "s/popover.connect('closed', () => resolve())/const foliateLightRecolor = color => () => { popover.annotation.set_property('color', color); popover.popdown(); return true }\n            popover.add_controller(utils.addShortcuts({ '<ctrl>1': foliateLightRecolor('$COLOR1'), '<ctrl>2': foliateLightRecolor('$COLOR2') }))\n            &/"
 
   if ((${#OVERLAYS[@]})); then
     joined=$(IFS=:; echo "${OVERLAYS[*]}")
