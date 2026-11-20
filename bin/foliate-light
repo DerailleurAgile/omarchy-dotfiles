@@ -1,26 +1,50 @@
 #!/bin/bash
-# Launch Foliate with highlights drawn for light pages.
+# Launch Foliate with small patches to its built-in resources:
 #
-# With the desktop in dark mode, Foliate's reader.html blends annotation
-# highlights with mix-blend-mode "screen" (meant for dark pages), which washes
-# them out on the always-light custom themes. This extracts the packaged
-# reader.html fresh on every launch (so it tracks Foliate updates), switches
-# the dark-mode blend to "multiply", and overlays it via G_RESOURCE_OVERLAYS.
+# 1. reader/reader.html: with the desktop in dark mode, Foliate blends
+#    annotation highlights with mix-blend-mode "screen" (meant for dark pages),
+#    which washes them out on the always-light custom themes. Switch to
+#    "multiply".
+# 2. book-viewer.js: add Ctrl+H to highlight the current selection (the
+#    selection popover has keyboard focus while open; stock Foliate only offers
+#    a Highlight button).
+#
+# Each file is extracted fresh from the packaged gresource on every launch (so
+# patches track Foliate updates) and loaded via G_RESOURCE_OVERLAYS. If a patch
+# no longer applies cleanly, that file is skipped and Foliate runs stock.
 #
 # Upstream context: https://github.com/johnfactotum/foliate/issues/1597
 
 GRES=/usr/share/com.github.johnfactotum.Foliate/com.github.johnfactotum.Foliate.gresource
-RES=/com/github/johnfactotum/Foliate/reader/reader.html
-OUT=${XDG_CACHE_HOME:-$HOME/.cache}/foliate-light/reader.html
+PREFIX=/com/github/johnfactotum/Foliate
+CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/foliate-light
+OVERLAYS=()
 
-if [[ -f $GRES ]] && mkdir -p "${OUT%/*}" &&
-   gresource extract "$GRES" "$RES" \
-     | sed 's/--overlayer-highlight-blend-mode: screen;/--overlayer-highlight-blend-mode: multiply;/' \
-     > "$OUT.tmp" && [[ -s $OUT.tmp ]]; then
-  mv "$OUT.tmp" "$OUT"
-  export G_RESOURCE_OVERLAYS="$RES=$OUT${G_RESOURCE_OVERLAYS:+:$G_RESOURCE_OVERLAYS}"
-else
-  rm -f "$OUT.tmp"  # fall back to stock behavior
+# patch <resource path under PREFIX> <literal anchor> <sed expression>
+# Applies only if the anchor appears exactly once in the packaged file.
+patch() {
+  local res=$1 anchor=$2 expr=$3 out=$CACHE/${1//\//_} src
+  src=$(gresource extract "$GRES" "$PREFIX/$res" 2>/dev/null) || return
+  [[ $(grep -cF -- "$anchor" <<<"$src") == 1 ]] || {
+    echo "foliate-light: skipping $res (patch anchor not found)" >&2; return; }
+  sed -- "$expr" <<<"$src" >"$out.tmp" && [[ -s $out.tmp ]] &&
+    mv "$out.tmp" "$out" && OVERLAYS+=("$PREFIX/$res=$out")
+  rm -f "$out.tmp"
+}
+
+if [[ -f $GRES ]] && mkdir -p "$CACHE"; then
+  patch reader/reader.html \
+    '--overlayer-highlight-blend-mode: screen;' \
+    's/--overlayer-highlight-blend-mode: screen;/--overlayer-highlight-blend-mode: multiply;/'
+
+  patch book-viewer.js \
+    'const popover = new SelectionPopover()' \
+    "s/const popover = new SelectionPopover()/&\n            popover.add_controller(utils.addShortcuts({ '<ctrl>h': 'selection.highlight' }))/"
+
+  if ((${#OVERLAYS[@]})); then
+    joined=$(IFS=:; echo "${OVERLAYS[*]}")
+    export G_RESOURCE_OVERLAYS="$joined${G_RESOURCE_OVERLAYS:+:$G_RESOURCE_OVERLAYS}"
+  fi
 fi
 
 exec /usr/bin/foliate "$@"

@@ -181,7 +181,7 @@ Windows are spawned directly (`setsid ... & disown`), not via
 through a Lua config layer where a plain exec string doesn't reliably spawn
 a process.
 
-### `foliate-light` — readable highlights on light book pages in dark mode
+### `foliate-light` — Foliate with readable highlights and a highlight shortcut
 
 Defined in [`bin/foliate-light`](bin/foliate-light).
 
@@ -195,11 +195,20 @@ one of those; the built-in themes always give a dark page in dark mode. Keep
 `screen` in dark mode, which washes them out on a light page.
 Upstream: [foliate#1597](https://github.com/johnfactotum/foliate/issues/1597).
 
-**What it does:** on every launch, extracts the packaged `reader.html` from
-Foliate's gresource, switches the dark-mode highlight blend to `multiply`,
-points `G_RESOURCE_OVERLAYS` at the patched copy, and runs Foliate. It
-re-extracts every time, so it follows Foliate updates, and it falls back to
-stock behavior if anything fails.
+**What it does:** on every launch, extracts two files from Foliate's
+gresource, patches them, points `G_RESOURCE_OVERLAYS` at the patched copies
+(in `~/.cache/foliate-light/`), and runs Foliate:
+
+- `reader/reader.html`: switches the dark-mode highlight blend from `screen`
+  to `multiply`.
+- `book-viewer.js`: adds **Ctrl+H** to highlight the current selection.
+  Stock Foliate only has a Highlight button in the selection popover. The
+  shortcut is attached to that popover, which has keyboard focus while
+  open. It uses the last-used highlight color.
+
+It re-extracts every time, so the patches follow Foliate updates. Each patch
+applies only if its anchor text appears exactly once; otherwise that file is
+skipped (with a message on stderr) and Foliate runs stock for that part.
 
 **Launcher hookup:** it only takes effect if Foliate is started through it.
 [`applications/com.github.johnfactotum.Foliate.desktop`](applications/com.github.johnfactotum.Foliate.desktop)
