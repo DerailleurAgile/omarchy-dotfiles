@@ -181,7 +181,7 @@ Windows are spawned directly (`setsid ... & disown`), not via
 through a Lua config layer where a plain exec string doesn't reliably spawn
 a process.
 
-### `foliate-light` — Foliate with readable highlights and a highlight shortcut
+### `foliate-light` — Foliate with readable highlights, highlight shortcuts, and important marks
 
 Defined in [`bin/foliate-light`](bin/foliate-light).
 
@@ -195,26 +195,45 @@ one of those; the built-in themes always give a dark page in dark mode. Keep
 `screen` in dark mode, which washes them out on a light page.
 Upstream: [foliate#1597](https://github.com/johnfactotum/foliate/issues/1597).
 
-**What it does:** on every launch, extracts two files from Foliate's
+**What it does:** on every launch, extracts four files from Foliate's
 gresource, patches them, points `G_RESOURCE_OVERLAYS` at the patched copies
 (in `~/.cache/foliate-light/`), and runs Foliate:
 
 - `reader/reader.html`: switches the dark-mode highlight blend from `screen`
   to `multiply`.
-- `book-viewer.js`: adds **Ctrl+H** to highlight the current selection.
-  Stock Foliate only has a Highlight button in the selection popover. The
-  shortcut is attached to that popover, which has keyboard focus while
-  open. It uses the last-used highlight color. Unlike the button, it closes
-  the popover itself (otherwise the popover's pointer grab stays active and
-  the window stops taking clicks) and skips the color/note popover that stock
-  Foliate opens after every new highlight. **Ctrl+1** / **Ctrl+2** work the
-  same way in yellow / light blue (`rgb(153,193,241)`, the first blue in the
-  Custom Color dialog; Foliate has no built-in blue) and
-  leave the last-used color alone.
-- `book-viewer.js`: click an existing highlight to open its popover, then
-  **Ctrl+1** / **Ctrl+2** recolor it yellow / light blue and close the
-  popover. This works like picking from the popover's color drop-down, but it
-  doesn't change the last-used color.
+- `book-viewer.js`: keyboard shortcuts for highlights.
+- `reader/reader.js`: draws a red curly bracket with a **!** to the right of
+  highlights marked important, aligned to the text column's edge.
+- `foliate-js/overlayer.js`: when a click lands on overlapping annotations,
+  real highlights win over bracket-only marks.
+
+| With… | Ctrl+H | Ctrl+1 | Ctrl+2 | Ctrl+Shift+1 |
+|---|---|---|---|---|
+| text selected | highlight, last-used color | highlight yellow | highlight light blue | bracket-only important mark (no fill) |
+| a highlight clicked | — | recolor yellow | recolor light blue | toggle important |
+
+Ctrl+Shift+1 ("!") rather than Ctrl+I, because Foliate uses Ctrl+I for book
+info.
+
+Light blue is `rgb(153,193,241)`, the first blue in the Custom Color dialog
+(Foliate has no built-in blue). None of the shortcuts change the last-used
+color. Each one closes the selection popover itself; otherwise the popover's
+pointer grab stays active and the window stops taking clicks. They also skip
+the color/note popover that stock Foliate opens after every new highlight. The
+Highlight button still opens it.
+
+**Important marks** are stored as a ❗ at the start of the highlight's note,
+because Foliate's annotation records have no spare field. The mark survives in
+stock Foliate and in exports as visible note text. Deleting the ❗ from the
+note removes the bracket.
+
+On a selection, Ctrl+Shift+1 creates a **bracket-only mark**: a transparent
+highlight with the ❗ note. Existing highlights inside the range keep their
+colors, and unhighlighted text stays plain. To add color as well, highlight
+first with Ctrl+H/1/2, then click the highlight and press Ctrl+Shift+1.
+Toggling a bracket-only mark off deletes it, with Foliate's usual Undo toast,
+rather than leaving an invisible highlight behind. Pressing Ctrl+1/2 on one
+fills it with color.
 
 It re-extracts every time, so the patches follow Foliate updates. Each patch
 applies only if its anchor text appears exactly once. If any patch for a file

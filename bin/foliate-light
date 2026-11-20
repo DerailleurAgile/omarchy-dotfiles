@@ -5,19 +5,30 @@
 #    annotation highlights with mix-blend-mode "screen" (meant for dark pages),
 #    which washes them out on the always-light custom themes. Switch to
 #    "multiply".
-# 2. book-viewer.js: add Ctrl+H to highlight the current selection (the
-#    selection popover has keyboard focus while open; stock Foliate only offers
-#    a Highlight button). The shortcut must also pop the popover down, as the
-#    button does; otherwise its pointer grab stays active and the window stops
-#    taking clicks. Stock Foliate then opens the annotation popover (color /
-#    note / delete) for the new highlight; Ctrl+H sets a one-shot flag that
-#    skips it, so the shortcut is a quick highlight. The button still opens it.
-#    Ctrl+1 / Ctrl+2 do the same in yellow / light blue (GTK color dialog's
-#    first blue, rgb(153,193,241)) without changing the
-#    last-used color that Ctrl+H and the button use.
-#    Clicking an existing highlight opens its annotation popover; there,
-#    Ctrl+1 / Ctrl+2 recolor that highlight and close the popover (same as
-#    picking the color from its drop-down, minus changing the last-used color).
+# 2. book-viewer.js: highlight shortcuts in the selection popover (which has
+#    keyboard focus while open; stock Foliate only offers a Highlight button):
+#      Ctrl+H        highlight in the last-used color
+#      Ctrl+1 / 2    highlight in yellow / light blue (last-used color untouched)
+#      Ctrl+Shift+1  bracket-only "important" mark over the selection: no
+#                    fill (a transparent highlight), so existing highlights keep
+#                    their colors and plain text stays plain
+#    Each pops the popover down, as the button does (otherwise its pointer grab
+#    stays active and the window stops taking clicks), and skips the annotation
+#    popover (color / note / delete) that stock Foliate opens after a new
+#    highlight. The Highlight button still opens it.
+#    In the annotation popover (opened by clicking a highlight):
+#      Ctrl+1 / 2    recolor it yellow / light blue
+#      Ctrl+Shift+1  toggle the important mark (on a bracket-only mark,
+#                    toggling off deletes it, with Foliate's usual Undo toast)
+#    (Ctrl+I would be the obvious key, but Foliate binds it to book info.)
+# 3. reader/reader.js: draw a red curly bracket with a "!" to the right of
+#    highlights marked important. The mark is a ❗ at the start of the
+#    highlight's note (Foliate's annotation records have no spare field), so it
+#    survives in stock Foliate and exports as visible note text; deleting the ❗
+#    from the note removes the bracket.
+# 4. foliate-js/overlayer.js: when a click lands on several annotations, real
+#    highlights win over bracket-only (transparent) marks, so clicking a
+#    colored highlight inside a bracketed range still opens that highlight.
 #
 # Each file is extracted fresh from the packaged gresource on every launch (so
 # patches track Foliate updates) and loaded via G_RESOURCE_OVERLAYS. If any
@@ -32,9 +43,12 @@ CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/foliate-light
 OVERLAYS=()
 COLOR1=yellow
 COLOR2='rgb(153,193,241)'  # first blue in the GTK color dialog
+# Ctrl+Shift+1; also match the shifted keyval ("!") in case GTK reports that.
+IMPORTANT_KEY='<ctrl><shift>1|<ctrl>exclam|<ctrl><shift>exclam'
 
-# patch <resource path under PREFIX> <literal anchor> <sed expression> [<anchor> <expr>]...
-# Applies only if every anchor appears exactly once in the packaged file.
+# patch <resource path under PREFIX> <anchor> <replacement> [<anchor> <replacement>]...
+# Literal text replacement. Applies only if every anchor appears exactly once
+# in the packaged file; otherwise the whole file is left stock.
 patch() {
   local res=$1 out=$CACHE/${1//\//_} src
   shift
@@ -42,7 +56,7 @@ patch() {
   while (($# >= 2)); do
     [[ $(grep -cF -- "$1" <<<"$src") == 1 ]] || {
       echo "foliate-light: skipping $res (patch anchor not found: $1)" >&2; return; }
-    src=$(sed -- "$2" <<<"$src") || return
+    src=${src/"$1"/"$2"}
     shift 2
   done
   [[ -n $src ]] || return
@@ -51,18 +65,188 @@ patch() {
   rm -f "$out.tmp"
 }
 
+# --- reader.html: highlight blend for light pages ----------------------------
+
+HTML_BLEND_OLD='        --overlayer-highlight-blend-mode: screen;'
+HTML_BLEND_NEW='        --overlayer-highlight-blend-mode: multiply;'
+
+# --- book-viewer.js: shortcuts ------------------------------------------------
+
+BV_HELPERS_ANCHOR='const ViewPreferencesWindow = GObject.registerClass({'
+IFS= read -r -d '' BV_HELPERS <<'EOF'
+// foliate-light: the "important" mark is a ❗ at the start of the note
+const FOLIATE_LIGHT_MARK = '❗'
+const foliateLightToggleImportant = annotation => {
+    const note = annotation.note ?? ''
+    annotation.set_property('note', note.startsWith(FOLIATE_LIGHT_MARK)
+        ? note.slice(FOLIATE_LIGHT_MARK.length).replace(/^\uFE0F?\s?/, '')
+        : FOLIATE_LIGHT_MARK + (note ? ' ' + note : ''))
+}
+const foliateLightIsBracketOnly = annotation =>
+    annotation.color === 'transparent' && (annotation.note ?? '').startsWith(FOLIATE_LIGHT_MARK)
+
+EOF
+BV_HELPERS+=$'\n'$BV_HELPERS_ANCHOR
+
+# Skip the annotation popover right after a shortcut-made highlight.
+BV_SKIP_ANCHOR="        if (type === 'annotation') return new Promise(resolve => {"
+BV_SKIP="$BV_SKIP_ANCHOR
+            if (this._foliateLightQuick) { this._foliateLightQuick = false; resolve(); return }"
+
+# Annotation popover: recolor / toggle important.
+BV_ANNOT_ANCHOR="            popover.connect('closed', () => resolve())"
+BV_ANNOT="            const foliateLightRecolor = color => () => { popover.annotation.set_property('color', color); popover.popdown(); return true }
+            popover.add_controller(utils.addShortcuts({
+                '<ctrl>1': foliateLightRecolor('$COLOR1'),
+                '<ctrl>2': foliateLightRecolor('$COLOR2'),
+                '$IMPORTANT_KEY': () => {
+                    if (foliateLightIsBracketOnly(popover.annotation))
+                        popover.activate_action('annotation.delete', null)
+                    else {
+                        foliateLightToggleImportant(popover.annotation)
+                        popover.popdown()
+                    }
+                    return true
+                },
+            }))
+$BV_ANNOT_ANCHOR"
+
+# Selection popover: quick highlights.
+BV_SEL_ANCHOR='            const popover = new SelectionPopover()'
+BV_SEL="$BV_SEL_ANCHOR
+            const foliateLightHighlight = color => () => {
+                const prev = this.highlight_color
+                if (color) this.highlight_color = color
+                this._foliateLightQuick = true
+                popover.activate_action('selection.highlight', null)
+                if (color) this.highlight_color = prev
+                popover.popdown()
+                return true
+            }
+            popover.add_controller(utils.addShortcuts({
+                '<ctrl>h': foliateLightHighlight(null),
+                '<ctrl>1': foliateLightHighlight('$COLOR1'),
+                '<ctrl>2': foliateLightHighlight('$COLOR2'),
+                '$IMPORTANT_KEY': () => {
+                    const existing = this.#data.annotations.get(value)
+                    if (existing) {
+                        if (foliateLightIsBracketOnly(existing)) this.#deleteAnnotation(existing)
+                        else foliateLightToggleImportant(existing)
+                        popover.popdown()
+                        return true
+                    }
+                    this._foliateLightImportant = true
+                    try { return foliateLightHighlight('transparent')() }
+                    finally { this._foliateLightImportant = false }
+                },
+            }))"
+
+# New marks made with Ctrl+Shift+1 start with the important mark as their note.
+BV_NOTE_ANCHOR='                        color: this.highlight_color,'
+BV_NOTE="$BV_NOTE_ANCHOR
+                        ...(this._foliateLightImportant ? { note: FOLIATE_LIGHT_MARK } : {}),"
+
+# --- reader.js: draw the important bracket ------------------------------------
+
+RJ_HELPERS_ANCHOR='class Reader {'
+IFS= read -r -d '' RJ_HELPERS <<'EOF'
+// foliate-light: red curly bracket + "!" to the right of important highlights
+const foliateLightBracket = (rects, range) => {
+    const NS = 'http://www.w3.org/2000/svg'
+    const g = document.createElementNS(NS, 'g')
+    const list = Array.from(rects).filter(r => r.width > 0 && r.height > 0)
+    if (!list.length) return g
+    // Group rects into columns/pages: a rect starting to the right of the
+    // current group begins a new one.
+    const groups = []
+    for (const r of list) {
+        const cur = groups.at(-1)
+        if (cur && r.left <= cur.right) {
+            cur.left = Math.min(cur.left, r.left)
+            cur.right = Math.max(cur.right, r.right)
+            cur.top = Math.min(cur.top, r.top)
+            cur.bottom = Math.max(cur.bottom, r.bottom)
+        } else groups.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom, line: r.height })
+    }
+    // Align brackets to the text column's right edge (the body's fragment in
+    // that column), not to wherever the selected text happens to end.
+    const body = range?.startContainer?.ownerDocument?.body
+    const frags = body ? Array.from(body.getClientRects()) : []
+    for (const c of groups) {
+        const frag = frags.find(f => f.left <= c.left + 1 && f.right >= c.left
+            && f.top <= c.bottom && f.bottom >= c.top)
+        const x = Math.max(c.right, frag?.right ?? c.right) + 4
+        const h = c.bottom - c.top
+        const mid = c.top + h / 2
+        const w = 5
+        const r = Math.min(w, h / 4)
+        const path = document.createElementNS(NS, 'path')
+        path.setAttribute('d', `M${x} ${c.top} Q${x + w} ${c.top} ${x + w} ${c.top + r}`
+            + ` L${x + w} ${mid - r} Q${x + w} ${mid} ${x + 2 * w} ${mid}`
+            + ` Q${x + w} ${mid} ${x + w} ${mid + r} L${x + w} ${c.bottom - r}`
+            + ` Q${x + w} ${c.bottom} ${x} ${c.bottom}`)
+        Object.entries({
+            fill: 'none', stroke: 'red', 'stroke-width': 1.5,
+            'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+        }).forEach(([k, v]) => path.setAttribute(k, v))
+        const text = document.createElementNS(NS, 'text')
+        text.textContent = '!'
+        Object.entries({
+            x: x + 2 * w + 3, y: mid, fill: 'red',
+            'font-family': 'sans-serif', 'font-weight': 'bold',
+            'font-size': Math.max(10, Math.min(18, c.line * 0.9)),
+            'dominant-baseline': 'central',
+        }).forEach(([k, v]) => text.setAttribute(k, v))
+        g.append(path, text)
+    }
+    return g
+}
+
+EOF
+RJ_HELPERS+=$'\n'$RJ_HELPERS_ANCHOR
+
+RJ_DRAW_ANCHOR='            const { draw, annotation, doc, range } = e.detail'
+IFS= read -r -d '' RJ_DRAW <<'EOF'
+            const { annotation, doc, range } = e.detail
+            const draw = annotation.note?.startsWith('❗')
+                ? (fn, opts) => e.detail.draw((rects, o) => {
+                    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+                    g.append(fn(rects, o), foliateLightBracket(rects, range))
+                    return g
+                }, opts)
+                : e.detail.draw
+EOF
+
+# --- overlayer.js: real highlights win clicks over bracket-only marks ---------
+
+OL_HIT_ANCHOR='        const arr = Array.from(this.#map.entries())'
+IFS= read -r -d '' OL_HIT <<'EOF'
+        const arr = Array.from(this.#map.entries())
+            // foliate-light: hitTest scans from the end, so put bracket-only
+            // (transparent) marks first and real highlights last
+            .sort(([, a], [, b]) => (a.options?.color !== 'transparent')
+                - (b.options?.color !== 'transparent'))
+EOF
+
+# --- apply ----------------------------------------------------------------------
+
 if [[ -f $GRES ]] && mkdir -p "$CACHE"; then
   patch reader/reader.html \
-    '--overlayer-highlight-blend-mode: screen;' \
-    's/--overlayer-highlight-blend-mode: screen;/--overlayer-highlight-blend-mode: multiply;/'
+    "$HTML_BLEND_OLD" "$HTML_BLEND_NEW"
 
   patch book-viewer.js \
-    'const popover = new SelectionPopover()' \
-    "s/const popover = new SelectionPopover()/&\n            const foliateLightHighlight = color => () => { const prev = this.highlight_color; if (color) this.highlight_color = color; this._foliateLightQuick = true; popover.activate_action('selection.highlight', null); if (color) this.highlight_color = prev; popover.popdown(); return true }\n            popover.add_controller(utils.addShortcuts({ '<ctrl>h': foliateLightHighlight(null), '<ctrl>1': foliateLightHighlight('$COLOR1'), '<ctrl>2': foliateLightHighlight('$COLOR2') }))/" \
-    "if (type === 'annotation') return new Promise(resolve => {" \
-    "s/if (type === 'annotation') return new Promise(resolve => {/&\n            if (this._foliateLightQuick) { this._foliateLightQuick = false; resolve(); return }/" \
-    "popover.connect('closed', () => resolve())" \
-    "s/popover.connect('closed', () => resolve())/const foliateLightRecolor = color => () => { popover.annotation.set_property('color', color); popover.popdown(); return true }\n            popover.add_controller(utils.addShortcuts({ '<ctrl>1': foliateLightRecolor('$COLOR1'), '<ctrl>2': foliateLightRecolor('$COLOR2') }))\n            &/"
+    "$BV_HELPERS_ANCHOR" "$BV_HELPERS" \
+    "$BV_SKIP_ANCHOR" "$BV_SKIP" \
+    "$BV_ANNOT_ANCHOR" "$BV_ANNOT" \
+    "$BV_SEL_ANCHOR" "$BV_SEL" \
+    "$BV_NOTE_ANCHOR" "$BV_NOTE"
+
+  patch reader/reader.js \
+    "$RJ_HELPERS_ANCHOR" "$RJ_HELPERS" \
+    "$RJ_DRAW_ANCHOR" "$RJ_DRAW"
+
+  patch foliate-js/overlayer.js \
+    "$OL_HIT_ANCHOR" "$OL_HIT"
 
   if ((${#OVERLAYS[@]})); then
     joined=$(IFS=:; echo "${OVERLAYS[*]}")
