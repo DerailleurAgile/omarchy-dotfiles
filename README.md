@@ -205,6 +205,9 @@ gresource, patches them, points `G_RESOURCE_OVERLAYS` at the patched copies
 - `reader/reader.js`: draws a red curly bracket with a **!** to the right of
   highlights marked important, aligned to the text column's edge, and floats
   each highlight's note in a bubble beside it (see **Note bubbles** below).
+  Also re-lays out each chapter once its images and fonts have loaded (and
+  again ~0.6 s later), as a font-size change does, so pages don't come out
+  cut off or mis-sized until you press Ctrl +/-.
 - `foliate-js/overlayer.js`: when a click lands on overlapping annotations,
   real highlights win over bracket-only marks.
 

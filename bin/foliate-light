@@ -33,6 +33,9 @@
 #    pages of a spread) the bubble overlaps the right edge of the text instead,
 #    ending left of the bracket. Colliding bubbles stack downward; long notes
 #    are clamped to 10 lines. The ❗ mark itself isn't shown in the bubble.
+#    Also re-lays out each section once its images and fonts have loaded, and
+#    again ~0.6 s later, as a font-size change does: otherwise pages can come
+#    out cut off or mis-sized until you press Ctrl +/-.
 # 4. foliate-js/overlayer.js: when a click lands on several annotations, real
 #    highlights win over bracket-only (transparent) marks, so clicking a
 #    colored highlight inside a bracketed range still opens that highlight.
@@ -340,6 +343,31 @@ const foliateLightRenderNotes = () => {
     }
 }
 
+// Cut-off / mis-sized pages: the first layout can run before the book's
+// images load or before the window settles at its tiled size, and stock
+// Foliate only re-counts pages afterwards. Force the same full re-layout a
+// font-size change does once images and fonts are ready, and again shortly
+// after (covers the window being resized as it's tiled).
+const foliateLightHookReflow = view => {
+    view.addEventListener('load', ({ detail: { doc } }) => {
+        const reflow = () => {
+            const { renderer } = view
+            if (typeof renderer?.render !== 'function') return // fixed layout
+            if (!renderer.getContents?.().some(c => c.doc === doc)) return
+            try { renderer.render() } catch (e) { console.error(e) }
+        }
+        const images = Array.from(doc.images ?? [])
+            .filter(img => !img.complete)
+            .map(img => new Promise(resolve => {
+                img.addEventListener('load', resolve, { once: true })
+                img.addEventListener('error', resolve, { once: true })
+            }))
+        Promise.all([doc.fonts?.ready, ...images])
+            .then(() => requestAnimationFrame(reflow))
+        setTimeout(reflow, 600)
+    })
+}
+
 EOF
 RJ_HELPERS+=$'\n'$RJ_HELPERS_ANCHOR
 
@@ -356,10 +384,12 @@ IFS= read -r -d '' RJ_DRAW <<'EOF'
                 : e.detail.draw
 EOF
 
-# Hook page turns, scrolling, resizes and deletes for the note bubbles.
+# Hook page turns, scrolling, resizes and deletes for the note bubbles, and
+# re-layout each section once it has settled (cut-off pages).
 RJ_INIT_ANCHOR='        this.#handleEvents()'
 RJ_INIT="$RJ_INIT_ANCHOR
-        foliateLightHookNotes(this.view)"
+        foliateLightHookNotes(this.view)
+        foliateLightHookReflow(this.view)"
 
 # --- overlayer.js: real highlights win clicks over bracket-only marks ---------
 
