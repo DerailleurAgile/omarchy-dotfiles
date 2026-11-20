@@ -204,11 +204,15 @@ gresource, patches them, points `G_RESOURCE_OVERLAYS` at the patched copies
 - `book-viewer.js`: adds **Ctrl+H** to highlight the current selection.
   Stock Foliate only has a Highlight button in the selection popover. The
   shortcut is attached to that popover, which has keyboard focus while
-  open. It uses the last-used highlight color.
+  open. It uses the last-used highlight color. Unlike the button, it closes
+  the popover itself (otherwise the popover's pointer grab stays active and
+  the window stops taking clicks) and skips the color/note popover that stock
+  Foliate opens after every new highlight.
 
 It re-extracts every time, so the patches follow Foliate updates. Each patch
-applies only if its anchor text appears exactly once; otherwise that file is
-skipped (with a message on stderr) and Foliate runs stock for that part.
+applies only if its anchor text appears exactly once. If any patch for a file
+doesn't fit, that whole file is skipped (with a message on stderr) and Foliate
+runs stock for that part.
 
 **Launcher hookup:** it only takes effect if Foliate is started through it.
 [`applications/com.github.johnfactotum.Foliate.desktop`](applications/com.github.johnfactotum.Foliate.desktop)

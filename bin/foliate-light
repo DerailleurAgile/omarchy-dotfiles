@@ -7,11 +7,16 @@
 #    "multiply".
 # 2. book-viewer.js: add Ctrl+H to highlight the current selection (the
 #    selection popover has keyboard focus while open; stock Foliate only offers
-#    a Highlight button).
+#    a Highlight button). The shortcut must also pop the popover down, as the
+#    button does; otherwise its pointer grab stays active and the window stops
+#    taking clicks. Stock Foliate then opens the annotation popover (color /
+#    note / delete) for the new highlight; Ctrl+H sets a one-shot flag that
+#    skips it, so the shortcut is a quick highlight. The button still opens it.
 #
 # Each file is extracted fresh from the packaged gresource on every launch (so
-# patches track Foliate updates) and loaded via G_RESOURCE_OVERLAYS. If a patch
-# no longer applies cleanly, that file is skipped and Foliate runs stock.
+# patches track Foliate updates) and loaded via G_RESOURCE_OVERLAYS. If any
+# patch for a file no longer applies cleanly, that whole file is skipped and
+# Foliate runs stock for it.
 #
 # Upstream context: https://github.com/johnfactotum/foliate/issues/1597
 
@@ -20,15 +25,21 @@ PREFIX=/com/github/johnfactotum/Foliate
 CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/foliate-light
 OVERLAYS=()
 
-# patch <resource path under PREFIX> <literal anchor> <sed expression>
-# Applies only if the anchor appears exactly once in the packaged file.
+# patch <resource path under PREFIX> <literal anchor> <sed expression> [<anchor> <expr>]...
+# Applies only if every anchor appears exactly once in the packaged file.
 patch() {
-  local res=$1 anchor=$2 expr=$3 out=$CACHE/${1//\//_} src
+  local res=$1 out=$CACHE/${1//\//_} src
+  shift
   src=$(gresource extract "$GRES" "$PREFIX/$res" 2>/dev/null) || return
-  [[ $(grep -cF -- "$anchor" <<<"$src") == 1 ]] || {
-    echo "foliate-light: skipping $res (patch anchor not found)" >&2; return; }
-  sed -- "$expr" <<<"$src" >"$out.tmp" && [[ -s $out.tmp ]] &&
-    mv "$out.tmp" "$out" && OVERLAYS+=("$PREFIX/$res=$out")
+  while (($# >= 2)); do
+    [[ $(grep -cF -- "$1" <<<"$src") == 1 ]] || {
+      echo "foliate-light: skipping $res (patch anchor not found: $1)" >&2; return; }
+    src=$(sed -- "$2" <<<"$src") || return
+    shift 2
+  done
+  [[ -n $src ]] || return
+  printf '%s\n' "$src" >"$out.tmp" && mv "$out.tmp" "$out" &&
+    OVERLAYS+=("$PREFIX/$res=$out")
   rm -f "$out.tmp"
 }
 
@@ -39,7 +50,9 @@ if [[ -f $GRES ]] && mkdir -p "$CACHE"; then
 
   patch book-viewer.js \
     'const popover = new SelectionPopover()' \
-    "s/const popover = new SelectionPopover()/&\n            popover.add_controller(utils.addShortcuts({ '<ctrl>h': 'selection.highlight' }))/"
+    "s/const popover = new SelectionPopover()/&\n            popover.add_controller(utils.addShortcuts({ '<ctrl>h': () => { this._foliateLightQuick = true; popover.activate_action('selection.highlight', null); popover.popdown(); return true } }))/" \
+    "if (type === 'annotation') return new Promise(resolve => {" \
+    "s/if (type === 'annotation') return new Promise(resolve => {/&\n            if (this._foliateLightQuick) { this._foliateLightQuick = false; resolve(); return }/"
 
   if ((${#OVERLAYS[@]})); then
     joined=$(IFS=:; echo "${OVERLAYS[*]}")
