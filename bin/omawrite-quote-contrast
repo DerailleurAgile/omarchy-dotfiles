@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""Brighten Omawrite's hard-coded dark-mode muted grey (blockquotes, list markers).
+
+Omawrite <= 0.7.2 draws muted Markdown text in a fixed #4f525a on dark themes
+(~2:1 contrast on Kanagawa's #1f1f28). This swaps that UTF-16 string literal in
+/usr/bin/omawrite for a brighter same-length colour. Idempotent; re-run by the
+pacman hook /etc/pacman.d/hooks/omawrite-quote-contrast.hook after upgrades.
+Upstream issue: https://github.com/omacom/omawrite/issues/163
+
+Usage: sudo omawrite-quote-contrast [#rrggbb]   (default #a6a69c)
+"""
+import os, re, shutil, sys
+
+BIN = "/usr/bin/omawrite"
+ORIG = "#4f525a"
+new = (sys.argv[1] if len(sys.argv) > 1 else "#a6a69c").lower()
+
+if not re.fullmatch(r"#[0-9a-f]{6}", new):
+    sys.exit(f"bad colour {new!r}; want #rrggbb")
+if os.geteuid() != 0:
+    sys.exit("run with sudo")
+
+data = open(BIN, "rb").read()
+enc = lambda s: s.encode("utf-16-le")
+marker = BIN + ".quote-colour"  # remembers what we last patched in
+
+prev = open(marker).read().strip() if os.path.exists(marker) else None
+if data.count(enc(ORIG)) == 1:
+    target = ORIG
+elif prev and data.count(enc(prev)) == 1:
+    target = prev
+else:
+    print(f"omawrite-quote-contrast: {ORIG} not found exactly once; "
+          "upstream may have changed it — skipping.")
+    sys.exit(0)
+
+if target == new:
+    print(f"omawrite-quote-contrast: already {new}")
+    sys.exit(0)
+
+if target == ORIG:
+    shutil.copy2(BIN, BIN + ".orig")
+tmp = BIN + ".tmp"
+with open(tmp, "wb") as f:
+    f.write(data.replace(enc(target), enc(new)))
+shutil.copymode(BIN, tmp)
+os.replace(tmp, BIN)
+open(marker, "w").write(new + "\n")
+print(f"omawrite-quote-contrast: {target} -> {new} (restart Omawrite)")

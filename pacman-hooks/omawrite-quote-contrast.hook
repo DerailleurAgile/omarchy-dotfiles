@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = omawrite
+
+[Action]
+Description = Brightening Omawrite muted/blockquote colour...
+When = PostTransaction
+Exec = /home/cchapman/Work/omarchy-dotfiles/bin/omawrite-quote-contrast
