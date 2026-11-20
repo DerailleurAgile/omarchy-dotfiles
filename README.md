@@ -181,7 +181,7 @@ Windows are spawned directly (`setsid ... & disown`), not via
 through a Lua config layer where a plain exec string doesn't reliably spawn
 a process.
 
-### `foliate-light` — Foliate with readable highlights, highlight shortcuts, and important marks
+### `foliate-light` — Foliate with readable highlights, highlight shortcuts, important marks, and note bubbles
 
 Defined in [`bin/foliate-light`](bin/foliate-light).
 
@@ -203,7 +203,8 @@ gresource, patches them, points `G_RESOURCE_OVERLAYS` at the patched copies
   to `multiply`.
 - `book-viewer.js`: keyboard shortcuts for highlights.
 - `reader/reader.js`: draws a red curly bracket with a **!** to the right of
-  highlights marked important, aligned to the text column's edge.
+  highlights marked important, aligned to the text column's edge, and floats
+  each highlight's note in a bubble beside it (see **Note bubbles** below).
 - `foliate-js/overlayer.js`: when a click lands on overlapping annotations,
   real highlights win over bracket-only marks.
 
@@ -226,6 +227,17 @@ Highlight button still opens it.
 because Foliate's annotation records have no spare field. The mark survives in
 stock Foliate and in exports as visible note text. Deleting the ❗ from the
 note removes the bracket.
+
+**Note bubbles:** a highlight's note shows in a bubble level with the
+highlight, to the right of the text column and of any bracket. The bubble's
+left edge takes the highlight's color, or red for a bracket-only mark. The
+bubbles live in a click-through layer above the whole reader, not in Foliate's
+page overlay, which is clipped to the page. Nothing reflows, and the bubbles
+can use the empty space beside the page. If there's no room there (narrow
+window, sidebar open, between the pages of a two-page spread), a bubble
+overlaps the right edge of the text instead, ending just left of the bracket.
+Bubbles that would collide stack downward, and long notes are cut off at 10
+lines. A note that is only the ❗ mark shows no bubble.
 
 On a selection, Ctrl+Shift+1 creates a **bracket-only mark**: a transparent
 highlight with the ❗ note. Existing highlights inside the range keep their

@@ -26,6 +26,13 @@
 #    highlight's note (Foliate's annotation records have no spare field), so it
 #    survives in stock Foliate and exports as visible note text; deleting the ❗
 #    from the note removes the bracket.
+#    Also floats each highlight's note in a bubble level with it, right of the
+#    text column and of any bracket, in a click-through layer above the whole
+#    reader (Foliate's own overlay is clipped to the page), so nothing reflows.
+#    With no room beside the page (narrow window, sidebar open, between the
+#    pages of a spread) the bubble overlaps the right edge of the text instead,
+#    ending left of the bracket. Colliding bubbles stack downward; long notes
+#    are clamped to 10 lines. The ❗ mark itself isn't shown in the bubble.
 # 4. foliate-js/overlayer.js: when a click lands on several annotations, real
 #    highlights win over bracket-only (transparent) marks, so clicking a
 #    colored highlight inside a bracketed range still opens that highlight.
@@ -146,7 +153,7 @@ BV_NOTE_ANCHOR='                        color: this.highlight_color,'
 BV_NOTE="$BV_NOTE_ANCHOR
                         ...(this._foliateLightImportant ? { note: FOLIATE_LIGHT_MARK } : {}),"
 
-# --- reader.js: draw the important bracket ------------------------------------
+# --- reader.js: important bracket and note bubbles ------------------------------------
 
 RJ_HELPERS_ANCHOR='class Reader {'
 IFS= read -r -d '' RJ_HELPERS <<'EOF'
@@ -202,12 +209,144 @@ const foliateLightBracket = (rects, range) => {
     return g
 }
 
+// foliate-light: floating note bubbles. They live in a fixed, click-through
+// layer above the whole reader (not in Foliate's overlay, which is clipped to
+// the page), so nothing reflows. Each bubble sits level with its highlight,
+// right of the text column and of any important bracket; with no room there it
+// overlaps the right edge of the text instead, ending left of the bracket.
+const foliateLightNotes = new Map() // annotation value -> { annotation, range, doc }
+const FOLIATE_LIGHT_BRACKET_SPACE = 28 // bracket + "!" width, see foliateLightBracket
+const foliateLightNoteText = annotation =>
+    (annotation.note ?? '').replace(/^❗️?\s*/, '').trim()
+let foliateLightLayer
+let foliateLightPending
+const foliateLightScheduleNotes = () => {
+    if (foliateLightPending) return
+    foliateLightPending = requestAnimationFrame(() => {
+        foliateLightPending = null
+        try { foliateLightRenderNotes() } catch (e) { console.error(e) }
+    })
+}
+const foliateLightTrackNote = (annotation, range, doc) => {
+    foliateLightNotes.set(annotation.value, { annotation, range, doc })
+    foliateLightScheduleNotes()
+}
+const foliateLightHookNotes = view => {
+    const hooked = new WeakSet()
+    view.addEventListener('relocate', () => {
+        const { renderer } = view
+        if (renderer && !hooked.has(renderer)) {
+            hooked.add(renderer)
+            renderer.addEventListener('scroll', foliateLightScheduleNotes)
+        }
+        foliateLightScheduleNotes()
+    })
+    view.addEventListener('load', foliateLightScheduleNotes)
+    addEventListener('resize', foliateLightScheduleNotes)
+    const deleteAnnotation = view.deleteAnnotation.bind(view)
+    view.deleteAnnotation = annotation => {
+        foliateLightNotes.delete(annotation.value)
+        foliateLightScheduleNotes()
+        return deleteAnnotation(annotation)
+    }
+}
+const foliateLightRenderNotes = () => {
+    if (!foliateLightLayer) {
+        foliateLightLayer = document.createElement('div')
+        foliateLightLayer.id = 'foliate-light-notes'
+        const style = document.createElement('style')
+        style.textContent = `
+            #foliate-light-notes { position: fixed; inset: 0; pointer-events: none;
+                overflow: hidden; z-index: 10; }
+            #foliate-light-notes .bubble { position: absolute; box-sizing: border-box;
+                padding: 5px 8px; border-radius: 8px; background: #fffdf7; color: #222;
+                border: 1px solid rgba(0, 0, 0, .18); border-left-width: 4px;
+                box-shadow: 0 1px 4px rgba(0, 0, 0, .18);
+                font: 12px/1.35 system-ui, sans-serif; white-space: pre-wrap;
+                overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical;
+                -webkit-line-clamp: 10; overflow: hidden; }
+            #foliate-light-notes .bubble.beside::before { content: ''; position: absolute;
+                left: -9px; top: 6px; border: 5px solid transparent;
+                border-right-color: var(--fl-color); border-left-width: 0; }`
+        document.head.append(style)
+        document.body.append(foliateLightLayer)
+    }
+    const layer = foliateLightLayer
+    layer.replaceChildren()
+    const view = globalThis.reader?.view
+    const doc = view?.renderer?.getContents?.()?.find(x => x.doc)?.doc
+    const frame = doc?.defaultView?.frameElement
+    const visRange = view?.lastLocation?.range
+    if (!doc || !frame || !visRange || visRange.startContainer?.ownerDocument !== doc) return
+    const fr = frame.getBoundingClientRect()
+    // Visible text area (both columns of a spread), in iframe coordinates.
+    const visRects = Array.from(visRange.getClientRects()).filter(r => r.width && r.height)
+    if (!visRects.length) return
+    const vb = {
+        left: Math.min(...visRects.map(r => r.left)),
+        right: Math.max(...visRects.map(r => r.right)),
+        top: Math.min(...visRects.map(r => r.top)),
+        bottom: Math.max(...visRects.map(r => r.bottom)),
+    }
+    const frags = Array.from(doc.body.getClientRects())
+        .filter(f => f.right > vb.left && f.left < vb.right)
+    const items = []
+    for (const [value, { annotation, range, doc: d }] of foliateLightNotes) {
+        if (d !== doc) continue
+        const text = foliateLightNoteText(annotation)
+        if (!text) continue
+        let rects
+        try { rects = Array.from(range.getClientRects()) } catch { continue }
+        rects = rects.filter(r => r.width && r.height
+            && r.right > vb.left && r.left < vb.right && r.bottom > vb.top && r.top < vb.bottom)
+        if (!rects.length) continue
+        const first = rects[0]
+        const frag = frags.find(f => f.left <= first.left + 1 && f.right >= first.left)
+        // only the highlight's first visible column matters for placement
+        const col = rects.filter(r => r.left <= (frag?.right ?? Infinity))
+        const colRight = Math.max(...col.map(r => r.right), frag?.right ?? -Infinity)
+        const colLeft = frag?.left ?? Math.min(...col.map(r => r.left))
+        const important = (annotation.note ?? '').startsWith('❗')
+        const nextCol = frags.map(f => f.left).filter(l => l > colRight).sort((a, b) => a - b)[0]
+        items.push({
+            value, text, top: Math.min(...col.map(r => r.top)) + fr.top,
+            colLeft: colLeft + fr.left, colRight: colRight + fr.left,
+            anchor: colRight + fr.left + 4 + (important ? FOLIATE_LIGHT_BRACKET_SPACE : 2),
+            limit: (nextCol != null ? nextCol + fr.left : innerWidth) - 8,
+            color: annotation.color === 'transparent' ? 'red' : annotation.color,
+        })
+    }
+    items.sort((a, b) => a.top - b.top)
+    const MIN_BESIDE = 140, MAX_WIDTH = 260
+    const laneBottoms = new Map() // stack bubbles that share a lane
+    for (const it of items) {
+        const free = it.limit - it.anchor
+        const beside = free >= MIN_BESIDE
+        const width = beside ? Math.min(MAX_WIDTH, free)
+            : Math.min(220, Math.max(120, (it.colRight - it.colLeft) * 0.6))
+        const left = beside ? it.anchor : it.colRight - 2 - width
+        const lane = `${beside}:${Math.round(left)}`
+        const top = Math.max(it.top, (laneBottoms.get(lane) ?? -Infinity) + 4)
+        const el = document.createElement('div')
+        el.className = beside ? 'bubble beside' : 'bubble'
+        el.textContent = it.text
+        Object.assign(el.style, {
+            left: `${left}px`, top: `${top}px`, width: `${width}px`,
+            borderLeftColor: it.color,
+        })
+        el.style.setProperty('--fl-color', it.color)
+        layer.append(el)
+        laneBottoms.set(lane, top + el.offsetHeight)
+    }
+}
+
 EOF
 RJ_HELPERS+=$'\n'$RJ_HELPERS_ANCHOR
 
 RJ_DRAW_ANCHOR='            const { draw, annotation, doc, range } = e.detail'
 IFS= read -r -d '' RJ_DRAW <<'EOF'
             const { annotation, doc, range } = e.detail
+            foliateLightTrackNote(annotation, range, doc)
             const draw = annotation.note?.startsWith('❗')
                 ? (fn, opts) => e.detail.draw((rects, o) => {
                     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
@@ -216,6 +355,11 @@ IFS= read -r -d '' RJ_DRAW <<'EOF'
                 }, opts)
                 : e.detail.draw
 EOF
+
+# Hook page turns, scrolling, resizes and deletes for the note bubbles.
+RJ_INIT_ANCHOR='        this.#handleEvents()'
+RJ_INIT="$RJ_INIT_ANCHOR
+        foliateLightHookNotes(this.view)"
 
 # --- overlayer.js: real highlights win clicks over bracket-only marks ---------
 
@@ -243,7 +387,8 @@ if [[ -f $GRES ]] && mkdir -p "$CACHE"; then
 
   patch reader/reader.js \
     "$RJ_HELPERS_ANCHOR" "$RJ_HELPERS" \
-    "$RJ_DRAW_ANCHOR" "$RJ_DRAW"
+    "$RJ_DRAW_ANCHOR" "$RJ_DRAW" \
+    "$RJ_INIT_ANCHOR" "$RJ_INIT"
 
   patch foliate-js/overlayer.js \
     "$OL_HIT_ANCHOR" "$OL_HIT"
