@@ -1,0 +1,5 @@
+{
+    "label": "Sepia (Light)",
+    "light": { "fg": "#5b4636", "bg": "#f1e8d0", "link": "#008b8b" },
+    "dark":  { "fg": "#5b4636", "bg": "#f1e8d0", "link": "#008b8b" }
+}

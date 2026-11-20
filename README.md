@@ -13,6 +13,8 @@ bin/      ~/.local/bin/*                       (personal scripts)
 hooks/    ~/.config/omarchy/hooks/<event>.d/*  (omarchy automation hooks)
 plugins/  ~/.config/omarchy/plugins/<id>/*     (omarchy-shell plugins)
 cliamp/   ~/.config/cliamp/{config.toml,playlists/*}  (cliamp player settings + playlists)
+foliate/  ~/.config/com.github.johnfactotum.Foliate/themes/*  (Foliate custom themes)
+applications/  ~/.local/share/applications/*   (desktop-entry overrides)
 ```
 
 Each file is symlinked individually from its target directory (the
@@ -60,6 +62,16 @@ mkdir -p ~/.config/cliamp/playlists
 ln -sf ~/Work/omarchy-dotfiles/cliamp/config.toml ~/.config/cliamp/config.toml
 for f in ~/Work/omarchy-dotfiles/cliamp/playlists/*; do
   ln -sf "$f" ~/.config/cliamp/playlists/"$(basename "$f")"
+done
+
+mkdir -p ~/.config/com.github.johnfactotum.Foliate/themes
+for f in ~/Work/omarchy-dotfiles/foliate/themes/*; do
+  ln -sf "$f" ~/.config/com.github.johnfactotum.Foliate/themes/"$(basename "$f")"
+done
+
+mkdir -p ~/.local/share/applications
+for f in ~/Work/omarchy-dotfiles/applications/*; do
+  ln -sf "$f" ~/.local/share/applications/"$(basename "$f")"
 done
 ```
 
@@ -176,8 +188,10 @@ Defined in [`bin/foliate-light`](bin/foliate-light).
 **Why:** with the desktop on `prefer-dark`, Foliate 3.3 renders the book
 page with dark colors no matter what the in-app Light Style swatch says.
 The page is kept light with custom themes whose `dark` colors match their
-`light` colors (`~/.config/com.github.johnfactotum.Foliate/themes/`, not
-tracked here). But `reader.html` still blends annotation highlights with
+`light` colors: [`foliate/themes/`](foliate/themes/), which shows up as
+Paper / Sepia / Grass **(Light)** in *Font & Layout Settings → Color*. Pick
+one of those; the built-in themes always give a dark page in dark mode. Keep
+*Invert Colors in Dark Mode* off. But `reader.html` still blends annotation highlights with
 `screen` in dark mode, which washes them out on a light page.
 Upstream: [foliate#1597](https://github.com/johnfactotum/foliate/issues/1597).
 
@@ -187,13 +201,16 @@ points `G_RESOURCE_OVERLAYS` at the patched copy, and runs Foliate. It
 re-extracts every time, so it follows Foliate updates, and it falls back to
 stock behavior if anything fails.
 
-**Launcher hookup (not tracked):** it only takes effect if Foliate is started
-through it, so copy the system desktop entry with `Exec` swapped in:
+**Launcher hookup:** it only takes effect if Foliate is started through it.
+[`applications/com.github.johnfactotum.Foliate.desktop`](applications/com.github.johnfactotum.Foliate.desktop)
+is the system desktop entry with `Exec` pointed at `foliate-light`. It
+shadows the packaged entry, so if a Foliate update changes that entry,
+regenerate it:
 
 ```bash
 sed 's|^Exec=foliate |Exec=/home/cchapman/.local/bin/foliate-light |' \
   /usr/share/applications/com.github.johnfactotum.Foliate.desktop \
-  > ~/.local/share/applications/com.github.johnfactotum.Foliate.desktop
+  > ~/Work/omarchy-dotfiles/applications/com.github.johnfactotum.Foliate.desktop
 ```
 
 Foliate is single-instance: quit it fully before relaunching, or the new

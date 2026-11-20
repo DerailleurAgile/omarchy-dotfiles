@@ -1,0 +1,5 @@
+{
+    "label": "Grass (Light)",
+    "light": { "fg": "#232c16", "bg": "#d7dbbd", "link": "#177b4d" },
+    "dark":  { "fg": "#232c16", "bg": "#d7dbbd", "link": "#177b4d" }
+}

@@ -1,0 +1,5 @@
+{
+    "label": "Paper (Light)",
+    "light": { "fg": "#000000", "bg": "#ffffff", "link": "#0066cc" },
+    "dark":  { "fg": "#000000", "bg": "#ffffff", "link": "#0066cc" }
+}
