@@ -207,7 +207,10 @@ gresource, patches them, points `G_RESOURCE_OVERLAYS` at the patched copies
   open. It uses the last-used highlight color. Unlike the button, it closes
   the popover itself (otherwise the popover's pointer grab stays active and
   the window stops taking clicks) and skips the color/note popover that stock
-  Foliate opens after every new highlight.
+  Foliate opens after every new highlight. **Ctrl+1** / **Ctrl+2** work the
+  same way in yellow / light blue (`rgb(153,193,241)`, the first blue in the
+  Custom Color dialog; Foliate has no built-in blue) and
+  leave the last-used color alone.
 
 It re-extracts every time, so the patches follow Foliate updates. Each patch
 applies only if its anchor text appears exactly once. If any patch for a file

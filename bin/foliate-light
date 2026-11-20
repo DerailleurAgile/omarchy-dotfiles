@@ -12,6 +12,9 @@
 #    taking clicks. Stock Foliate then opens the annotation popover (color /
 #    note / delete) for the new highlight; Ctrl+H sets a one-shot flag that
 #    skips it, so the shortcut is a quick highlight. The button still opens it.
+#    Ctrl+1 / Ctrl+2 do the same in yellow / light blue (GTK color dialog's
+#    first blue, rgb(153,193,241)) without changing the
+#    last-used color that Ctrl+H and the button use.
 #
 # Each file is extracted fresh from the packaged gresource on every launch (so
 # patches track Foliate updates) and loaded via G_RESOURCE_OVERLAYS. If any
@@ -50,7 +53,7 @@ if [[ -f $GRES ]] && mkdir -p "$CACHE"; then
 
   patch book-viewer.js \
     'const popover = new SelectionPopover()' \
-    "s/const popover = new SelectionPopover()/&\n            popover.add_controller(utils.addShortcuts({ '<ctrl>h': () => { this._foliateLightQuick = true; popover.activate_action('selection.highlight', null); popover.popdown(); return true } }))/" \
+    "s/const popover = new SelectionPopover()/&\n            const foliateLightHighlight = color => () => { const prev = this.highlight_color; if (color) this.highlight_color = color; this._foliateLightQuick = true; popover.activate_action('selection.highlight', null); if (color) this.highlight_color = prev; popover.popdown(); return true }\n            popover.add_controller(utils.addShortcuts({ '<ctrl>h': foliateLightHighlight(null), '<ctrl>1': foliateLightHighlight('yellow'), '<ctrl>2': foliateLightHighlight('rgb(153,193,241)') }))/" \
     "if (type === 'annotation') return new Promise(resolve => {" \
     "s/if (type === 'annotation') return new Promise(resolve => {/&\n            if (this._foliateLightQuick) { this._foliateLightQuick = false; resolve(); return }/"
 
